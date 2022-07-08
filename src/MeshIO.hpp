@@ -1,6 +1,11 @@
 #ifndef __MESH_IO_H__
 #define __MESH_IO_H__
+#include <fstream>
+#include <iostream>
 #include <string>
+#include <map>
+#include <numeric>
+
 #include "Mesh.hpp"
 
 struct MeshIO
@@ -15,7 +20,7 @@ struct MeshIO
     static int read(Mesh<D>& mesh, const std::string& filename, MshGenerator type = MshGenerator::GMSH) {
         // parse the filename and get the extension
         auto ext = filename.substr(filename.find_last_of('.') + 1);
-        if(ext == ".msh" or ext == ".gmsh") {
+        if(ext == "msh" or ext == "gmsh") {
             return _read_gmsh(mesh, filename, type);
         }
         return -1;
@@ -177,7 +182,11 @@ struct MeshIO
                 element_info += std::get<0>(value);
                 element_ID.insert(element_ID.end(), std::get<1>(value).begin(), std::get<1>(value).end());
                 type_offset.push_back(element_info.size());
+                //std::cout << "type_offset: " << type_offset.size() << std::endl;
+                //printf("type_offset: %zu %zu\n, ", type_offset.size(), type_offset.back());
+                //printf("size = %zu\n", [key].first.size());
             }
+
         }
 
 		return 1;
@@ -194,7 +203,6 @@ struct MeshIO
 		std::cerr << "Not implemented: " << __func__ << std::endl;
 		return -2;
 	}
-    bool ff = ElementSpace<1>::is_compatible<ElementSpace<1>::Type::Hexahedron>::value;
     template <int D>
     static constexpr int _num_vertices(typename ElementSpace<D>::Type element_type) {
         typename ElementSpace<D>::template Element<ElementSpace<D>::Type::Vertex> E;

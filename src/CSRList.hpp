@@ -138,16 +138,17 @@ template <typename T,
     }
 	private:
 	static void _concatenate(CSRList& first, const CSRList& second)	{
-		if(second.size() >= 0) {
+		if(second.size() > 0) {
 			auto original_num_entities = first.size();
 			auto augmented_num_entities = second.size();
 
 			auto& data = first.data();
 			data.insert(data.end(), second.data().begin(), second.data().end());
 			auto& offset = first.offset();
+			auto increment = offset.back();
 			offset.insert(offset.end(), second.offset().begin() + 1, second.offset().end());
-			std::for_each(offset.begin() + original_num_entities, offset.end(), 
-				[&](auto& item) { item += original_num_entities; } );
+			std::for_each(offset.begin() + original_num_entities + 1, offset.end(), 
+				[&](auto& item) { item += increment; } );
 
 			assert(first.size() == original_num_entities + augmented_num_entities);
 		}

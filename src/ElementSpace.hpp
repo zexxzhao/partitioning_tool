@@ -44,7 +44,7 @@ template <int D> struct ElementSpace
         or (D == 3)> {};
     template<Type type> inline static constexpr bool is_compatible_v = is_compatible<type>::value;
 
-    static constexpr std::vector<Type> prime_element_types() {
+    static std::vector<Type> prime_element_types() {
         if constexpr (D == 0) {
             return {Type::Vertex};
         }
@@ -62,7 +62,7 @@ template <int D> struct ElementSpace
         }
     }
 
-    static constexpr std::vector<Type> secondary_element_types() {
+    static std::vector<Type> secondary_element_types() {
         if constexpr (D == 1) {
             return {Type::Vertex};
         }
@@ -77,7 +77,7 @@ template <int D> struct ElementSpace
         }
     }
 
-    constexpr std::vector<Type> all_element_types() {
+    static std::vector<Type> all_element_types() {
         if constexpr (D == 0) {
             return {Type::Vertex};
         }
