@@ -192,7 +192,7 @@ TEST(MeshData_read, metis) {
 #define BOX_MSH
 #ifdef BOX_MSH
 const std::string filename = "../box.msh";
-int num_entitties[] = {131753, 744285};
+int num_entities[] = {131753, 744285};
 double center[] = {3.7496478658,  -0.005098642278, -0.0188287907804};
 size_t element_num[] = {131753, 0, 3220, 0, 741065, 0, 0, 0, 0};
 #else // defined(SPHERE_MSH)
@@ -208,8 +208,8 @@ TEST(MeshIO, Mesh) {
 	Mesh<3> mesh;
 	MeshIO::read<3>(mesh, filename);
 
-	EXPECT_EQ(mesh.nodes().size(), num_entitties[0] * mesh.dim());
-	EXPECT_EQ(mesh.elements().second.size() - mesh.nodes().size() / mesh.dim(), num_entitties[1]);
+	EXPECT_EQ(mesh.nodes().size(), num_entities[0] * mesh.dim());
+	EXPECT_EQ(mesh.elements().second.size() - mesh.nodes().size() / mesh.dim(), num_entities[1]);
 	const auto nodes = mesh.nodes();
 	double x[3] = {0.0, 0.0, 0.0};
 	int i = 0;
@@ -361,6 +361,20 @@ TEST(MeshConnectivity, Mesh) {
 	}
 }
 
+TEST(MeshPartitioner, partitioning) {
+	Mesh<3> mesh;
+	MeshIO::read<3>(mesh, filename);
+	MeshPartitioner part(mesh);
+	auto num_parts = 4;
+	part.metis(num_parts);
+	int ne = 0, nn = 0;
+	for(int i = 0; i < num_parts; ++i) {
+		ne += part.partition(i, "e").size();
+		nn += part.partition(i, "n").size();
+	}
+	EXPECT_EQ(ne, element_num[4]);
+	EXPECT_EQ(nn, num_entities[0]);
+}
 int main(int argc, char* argv[] ){
 	testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();

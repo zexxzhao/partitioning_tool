@@ -6,7 +6,7 @@
 #include <array>
 #include <algorithm>
 #include <numeric>
-//#include <map>
+#include <metis.h>
 #include "CSRList.hpp"
 #include "ElementSpace.hpp"
 
@@ -230,6 +230,86 @@ struct MeshConnectivity
     CSRList<std::size_t> _adjacent_vertices;
     Mesh<D> * _mesh;
 
+};
+
+template<int D>
+struct MeshPartitioner
+{
+    MeshPartitioner(const Mesh<D>& mesh): _mesh(&mesh) {}
+
+
+    const std::vector<idx_t>& partition(std::size_t rank, const std::string& mode = "e") const {
+        if(mode == "e"){
+            return _element_partitioning[rank];
+        }
+        else {
+            return _node_partitioning[rank];
+        }
+    }
+
+    void metis(idx_t num_parts = 4){
+        idx_t num_nodes = _mesh->nodes().size() / D;
+        const auto& elements = _mesh->elements();
+        const auto prime_element_type = ElementSpace<D>().prime_element_types();
+        CSRList<std::size_t> prime_element_list;
+        std::for_each(prime_element_type.begin(), prime_element_type.end(),
+            [&](FiniteElementType type) {
+                prime_element_list += std::move(this->_mesh->elements(type).first);
+            }
+        );
+        idx_t num_elements = prime_element_list.size();
+        std::vector<idx_t> element_array(prime_element_list.data().begin(), prime_element_list.data().end());
+        std::vector<idx_t> element_offset(prime_element_list.offset().begin(), prime_element_list.offset().end());
+
+
+        idx_t* vwgt = nullptr;
+        idx_t* vsize = nullptr;
+        idx_t ncommon = 1;
+
+        real_t* tpwgts = nullptr;
+        idx_t objval = 1;
+
+        idx_t options[METIS_NOPTIONS];
+        METIS_SetDefaultOptions(options);
+        options[METIS_OPTION_PTYPE]   = METIS_PTYPE_KWAY;
+        options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
+        options[METIS_OPTION_CTYPE]   = METIS_CTYPE_SHEM;
+        options[METIS_OPTION_IPTYPE]  = METIS_IPTYPE_GROW;
+        options[METIS_OPTION_RTYPE]   = -1;
+        options[METIS_OPTION_DBGLVL]  = 0;
+        options[METIS_OPTION_UFACTOR] = -1;
+        options[METIS_OPTION_MINCONN] = 0;
+        options[METIS_OPTION_CONTIG]  = 0;
+        options[METIS_OPTION_SEED]    = -1;
+        options[METIS_OPTION_NITER]   = 10;
+        options[METIS_OPTION_NCUTS]   = 1;
+        std::vector<idx_t> epart(num_elements), npart(num_nodes);
+        //_epart.resize(num_nodes);
+        //_npart.resize(num_elements);
+        auto status = METIS_PartMeshDual(&num_elements, &num_nodes, 
+            //mesh.eptr.data(), mesh.eind.data(), 
+            element_offset.data(), element_array.data(),
+            vwgt, vsize, &ncommon, &num_parts,
+            tpwgts, options, &objval,
+            epart.data(), npart.data()
+        );
+        assert(status == METIS_OK);
+
+        _element_partitioning.resize(num_parts);
+        _node_partitioning.resize(num_parts);
+        for(std::size_t i = 0; i < epart.size(); ++i) {
+            auto rank = epart[i];
+            _element_partitioning[rank].push_back(i);
+        }
+        for(std::size_t i = 0; i < npart.size(); ++i) {
+            auto rank = npart[i];
+            _node_partitioning[rank].push_back(i);
+        }
+    }
+    private:
+    const Mesh<D>* _mesh;
+    std::vector<std::vector<idx_t>> _element_partitioning;
+    std::vector<std::vector<idx_t>> _node_partitioning;
 };
 
 #endif // __MESH_H__

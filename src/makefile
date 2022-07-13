@@ -3,7 +3,7 @@
 #LIBS=-L/home/zezhao/usr/local/metis-5.1.0/lib/ -L/home/zezhao/usr/local/gtest/lib/
 
 FLAGS=-std=c++17
-FLAGS+=-O0 -g #-fsanitize=address #-pg
+FLAGS+=-O3 -g #-fsanitize=address #-pg
 CC=g++
 
 all: mp
