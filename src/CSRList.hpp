@@ -3,12 +3,13 @@
 
 #include <type_traits>
 #include <vector>
-
+#include <map>
+#include <set>
 #include "CSRListObject.hpp"
 #include "CSRListIterator.hpp"
 
 
-template <typename T, typename U = std::size_t, typename std::enable_if_t<std::is_integral_v<U> or std::is_enum_v<U>>* Dummy_value = nullptr > struct CSRList;
+template <typename T = std::size_t, typename U = T, typename std::enable_if_t<std::is_integral_v<U> or std::is_enum_v<U>>* Dummy_value = nullptr > struct CSRList;
 
 template <typename List> struct is_CSRList : std::false_type {};
 template <typename T, typename U> struct is_CSRList<CSRList<T, U> > : std::true_type {};
@@ -97,8 +98,21 @@ template <typename T,
 	}
 
     void push_back(const std::vector<T>& entity) {
-        data().insert(_data.end(), entity.begin(), entity.end());
+        data().insert(data().end(), entity.begin(), entity.end());
         offset().push_back(data().size());
+    }
+
+    void push_back(std::vector<T>&& entity) {
+		if(data().empty()) {
+			data() = std::move(entity);
+		}
+		else if(not entity.empty()) {
+			data().insert(data().end(), 
+				std::make_move_iterator(entity.begin()), 
+				std::make_move_iterator(entity.end()));
+			entity.clear();
+		}
+		offset().push_back(data().size());
     }
 
 	auto operator+(const CSRList& list) const {
@@ -131,6 +145,32 @@ template <typename T,
     const_Iterator end() const {
         return iterator(num_entities());
     }
+
+	template<typename Data = T>
+	std::enable_if_t<std::is_same_v<Data, U> and std::is_integral_v<Data>, CSRList> reverse() const {
+		//TODO: find an inplace reversing method
+		std::map<T, std::vector<T>> _map_tmp;
+		for(auto it = this->begin(); it != this->end(); ++it) {
+			for(auto index : it->data()) {
+				//_map_tmp[index].insert(it->index());
+				_map_tmp[index].push_back(it->index());
+			}
+		}
+
+		CSRList results;
+		auto max_index = (_map_tmp.size() ? _map_tmp.rbegin()->first : 0); // an ordered map stores the largest index in the end
+		for(Data i = 0; i <= max_index and max_index != 0; ++i) {
+			const auto it = _map_tmp.find(i);
+			if(it != _map_tmp.end()) {
+				//auto v = std::vector<Data>(it->second.begin(), it->second.end());
+				results.push_back(it->second);
+			}
+			else {
+				results.push_back(std::vector<Data>({}));
+			}
+		}
+		return results;
+	}
 
     void clear() {
         _data.clear();

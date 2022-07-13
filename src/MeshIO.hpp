@@ -170,6 +170,7 @@ struct MeshIO
             std::vector<typename std::decay_t<decltype(element_node_list)>::data_type> node_list(num_vertices);
             for(int j = 0; j < num_vertices; j++) {
                 p = str_parsing(p, node_list[j]);
+                node_list[j]--;
             }
             element_node_list.push_back(node_list);
         }

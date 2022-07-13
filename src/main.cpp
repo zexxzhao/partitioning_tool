@@ -52,6 +52,77 @@ TEST(CSRList, operator) {
 	EXPECT_EQ(list3.size(), 5);
 	EXPECT_EQ(std::accumulate(list3.data().begin(), list3.data().end(), 0.0), 24 + 18);
 	EXPECT_EQ(list4.size(), 2);
+
+	std::vector<std::size_t> x5 = {0, 1, 2, 0, 2, 3, 1, 2, 4};
+	std::vector<std::size_t> indptr5 = {0, 3, 5, 9};
+	CSRList list5(x5, indptr5);
+
+	auto list6 = list5.reverse();
+	EXPECT_EQ(list6.data()[0], 0);
+	EXPECT_EQ(list6.data()[3], 2);
+	EXPECT_EQ(list6.data()[6], 2);
+	EXPECT_EQ(std::accumulate(list6.data().begin(), list6.data().end(), 0), 10);
+	EXPECT_EQ(std::accumulate(list6.offset().begin(), list6.offset().end(), 0), 30);
+}
+
+TEST(CSRList, reverse) {
+	std::vector<std::size_t> x0 = {0, 1, 2, 0, 2, 3, 1, 2, 4};
+	std::vector<std::size_t> indptr0 = {0, 3, 5, 9};
+	// 0->{0, 1, 2}
+	// 1->{0, 2}
+	// 2->{3, 1, 2, 4}
+	// reverse
+	// 0 ->{0, 1}
+	// 1 ->{0, 2}
+	// 2 ->{0, 1, 2}
+	// 3 ->{2}
+	// 4 ->{2}
+	// data = {0, 1, 0, 2, 0, 1, 2, 2, 2}
+	// offset = {0, 2, 4, 7, 8, 9}
+	auto list = CSRList(x0, indptr0).reverse();
+	EXPECT_EQ(std::accumulate(list.data().begin(), list.data().end(), 0), 10);
+	EXPECT_EQ(std::accumulate(list.offset().begin(), list.offset().end(), 0), 30);
+
+	std::vector<std::size_t> x1 = {0,2,4,9,6,4,8};
+	std::vector<std::size_t> indptr1 = {0,3,3,3,3,3,7};
+	auto list1 = CSRList(x1, indptr1);
+	// 0 ->{0, 2, 4}
+	// 1,2,3,4 ->{}
+	// 5 ->{9, 6, 4, 8}
+	// reverse
+	// 0 -> {0}
+	// 1 -> {}
+	// 2 -> {0}
+	// 3 -> {}
+	// 4 -> {0, 5}
+	// 5 -> {}
+	// 6 -> {5}
+	// 7 -> {}
+	// 8 -> {5}
+	// 9 -> {5}
+	// data = {0,0,0,5,5,5,5}
+	// offset = {0,1,1,2,2,4,4,5,5,6,7}
+
+	EXPECT_EQ(
+		std::accumulate(x1.begin(), x1.end(), 0), 
+		std::accumulate(list1.data().begin(), list1.data().end(), 0)
+	);
+	EXPECT_EQ(
+		std::accumulate(indptr1.begin(), indptr1.end(), 0),
+		std::accumulate(list1.offset().begin(), list1.offset().end(), 0)
+	);
+	auto list2 = list1.reverse();
+	EXPECT_EQ(std::accumulate(list2.data().begin(), list2.data().end(), 0), 20);
+	EXPECT_EQ(std::accumulate(list2.offset().begin(), list2.offset().end(), 0), 37);
+	auto list3 = list2.reverse();
+	EXPECT_EQ(
+		std::accumulate(list1.data().begin(), list1.data().end(), 0),
+		std::accumulate(list3.data().begin(), list3.data().end(), 0)
+	);
+	EXPECT_EQ(
+		std::accumulate(list1.offset().begin(), list1.offset().end(), 0),
+		std::accumulate(list3.offset().begin(), list3.offset().end(), 0)
+	);
 }
 
 TEST(CSRList, Iterators) {
@@ -118,21 +189,21 @@ TEST(MeshData_read, metis) {
 }
 */
 
-
-
-TEST(MeshIO, Mesh) {
 #define BOX_MSH
 #ifdef BOX_MSH
-	const std::string filename = "../box.msh";
-	int num_entitties[] = {131753, 744285};
-	double center[] = {3.7496478658,  -0.005098642278, -0.0188287907804};
-	size_t element_num[] = {131753, 0, 3220, 0, 741065, 0, 0, 0, 0};
+const std::string filename = "../box.msh";
+int num_entitties[] = {131753, 744285};
+double center[] = {3.7496478658,  -0.005098642278, -0.0188287907804};
+size_t element_num[] = {131753, 0, 3220, 0, 741065, 0, 0, 0, 0};
 #else // defined(SPHERE_MSH)
-	const std::string filename = "../re3700.msh";
-	int num_entitties[] = {1234222, 7326679};
-	double center[] = {2.336090445539671,  0.0006215432516590993, 0.00015412152905954366};
-	size_t element_num[] = {1234222, 0, 0, 0, 7326679, 0, 0, 0, 0};
+const std::string filename = "../re3700.msh";
+int num_entitties[] = {1234222, 7326679};
+double center[] = {2.336090445539671,  0.0006215432516590993, 0.00015412152905954366};
+size_t element_num[] = {1234222, 0, 0, 0, 7326679, 0, 0, 0, 0};
 #endif
+
+TEST(MeshIO, Mesh) {
+
 
 	Mesh<3> mesh;
 	MeshIO::read<3>(mesh, filename);
@@ -165,6 +236,128 @@ TEST(MeshIO, Mesh) {
 		EXPECT_EQ(elem.first.size(), element_num[i]);
 		EXPECT_EQ(elem.second.size(), element_num[i]);
 		++i;
+	}
+}
+
+
+TEST(MeshConnectivity, Mesh) {
+	Mesh<3> mesh;
+	MeshIO::read<3>(mesh, filename);
+
+	MeshConnectivity<3> conn(mesh);
+	/*
+	for(std::size_t i = 0; i <= 3; ++i) {
+		for(std::size_t j = 0; j <= 3; ++j) {
+			if (conn._connectivity.find({i, j}) != conn._connectivity.end()) {
+				std::cout << "[i, j] = " 
+					<< i << ", " << j 
+					<< " size = " <<conn._connectivity.at({i, j}).size() << std::endl;
+			}
+		}
+	}
+	*/
+
+	EXPECT_EQ( conn.connectivity(3, 0).size(), mesh.elements(FiniteElementType::Tetrahedron).second.size() );
+	EXPECT_EQ( conn.connectivity(3, 2).size(), mesh.elements(FiniteElementType::Tetrahedron).second.size());
+	EXPECT_EQ( conn.connectivity(2, 0).size(), element_num[2]);
+	bool check_0to2 = true;
+	bool check_0to3 = true;
+	bool check_2to3 = true;
+	bool check_3to2 = true;
+	bool check_vtx_connectivity = true;
+	if(check_0to2){
+		const auto& map0to2 = conn.connectivity(0, 2);
+		const auto& map2to0 = conn.connectivity(2, 0);
+		ASSERT_EQ(map0to2.size(), mesh.elements(FiniteElementType::Vertex).second.size());
+		for(std::size_t ivtx = 0; ivtx < map0to2.size(); ++ivtx) {
+			for(auto ifacet : map0to2[ivtx]) {
+				auto vertex_on_facet = map2to0[ifacet];
+				auto found = std::accumulate(
+					vertex_on_facet.begin(), 
+					vertex_on_facet.end(),
+					0,
+					[&](int init, std::size_t a) {
+						return init + (a == ivtx);
+					}
+				);
+				EXPECT_EQ(found, 1);
+			}
+		}
+	}
+	if(check_0to3){
+		const auto& map0to3 = conn.connectivity(0, 3);
+		const auto& map3to0 = conn.connectivity(3, 0);
+		ASSERT_EQ(map0to3.size(), mesh.elements(FiniteElementType::Vertex).second.size());
+		for(std::size_t ivtx = 0; ivtx < map0to3.size(); ++ivtx) {
+			for(auto ielem : map0to3[ivtx]) {
+				auto vertex_on_cell = map3to0[ielem];
+				auto found = std::accumulate(
+					vertex_on_cell.begin(), 
+					vertex_on_cell.end(),
+					0,
+					[&](int init, std::size_t a) {
+						return init + (a == ivtx);
+					}
+				);
+				EXPECT_EQ(found, 1);
+			}
+		}
+	}
+	if(check_2to3){
+		const auto& map2to3 = conn.connectivity(2, 3);
+		const auto& map2to0 = conn.connectivity(2, 0);
+		const auto& map3to0 = conn.connectivity(3, 0);
+		for(std::size_t ifacet = 0; ifacet < map2to3.size(); ++ifacet) {
+			ASSERT_LE(map2to3[ifacet].size(), 2);
+			auto ielem = map2to3[ifacet][0];
+			auto vertex_on_facet = map2to0[ifacet];
+			auto vertex_on_cell = map3to0[ielem];
+			int found = std::accumulate(
+				vertex_on_facet.begin(), 
+				vertex_on_facet.end(), 
+				0,
+				[&](int init, std::size_t a) {
+					return init + (std::find(vertex_on_cell.begin(), vertex_on_cell.end(), a) != vertex_on_cell.end());
+				}
+			);
+			EXPECT_EQ(found, vertex_on_facet.size());
+		}
+	}
+	if(check_3to2) {
+		const auto& map3to2 = conn.connectivity(3, 2);
+		const auto& map2to0 = conn.connectivity(2, 0);
+		const auto& map3to0 = conn.connectivity(3, 0);
+		for(std::size_t ielem = 0; ielem < map3to2.size(); ++ielem) {
+			if(map3to2[ielem].empty()) {
+				continue;
+			}
+			auto ifacet = map3to2[ielem][0];
+			auto vertex_on_facet = map2to0[ifacet];
+			auto vertex_on_cell = map3to0[ielem];
+			int found = std::accumulate(
+				vertex_on_facet.begin(), 
+				vertex_on_facet.end(), 
+				0,
+				[&](int init, std::size_t a) {
+					return init + (std::find(vertex_on_cell.begin(), vertex_on_cell.end(), a) != vertex_on_cell.end());
+				}
+			);
+			EXPECT_EQ(found, vertex_on_facet.size());
+		}
+	}
+	if(check_vtx_connectivity) {
+		const auto& map0 = conn.adjacent_vertices();
+		const auto& map1 = map0.reverse();
+		ASSERT_EQ(map0.size(), mesh.nodes().size() / 3);
+		ASSERT_EQ(map0.size(), map1.size());
+
+		for(auto i = 0; i < map0.data().size(); ++i) {
+			EXPECT_EQ(map0.data()[i], map1.data()[i]);
+		}
+
+		for(auto i = 0; i < map0.offset().size(); ++i) {
+			EXPECT_EQ(map0.offset()[i], map1.offset()[i]);
+		}
 	}
 }
 

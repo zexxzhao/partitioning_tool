@@ -98,7 +98,25 @@ template <int D> struct ElementSpace
         }
 
     }
-    
+    static int topologic_dim(Type type) {
+        if(type == Type::Vertex) {
+            return 0;
+        }
+        else if(type == Type::Line) {
+            return 1;
+        }
+        else if(type == Type::Triangle or type == Type::Quadrangle) {
+            return 2;
+        }
+        else if(type == Type::Tetrahedron 
+            or type == Type::Hexahedron 
+            or type == Type::Prism 
+            or type == Type::Pyramid) {
+            return 3;
+        }
+        return -1;
+    }
+
     template<Type type, typename std::enable_if_t<is_compatible_v<type>>* = nullptr> struct Element
     { 
 
