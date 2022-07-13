@@ -201,21 +201,29 @@ struct MeshConnectivity
     void _build_vertex_adjacency_list() {
         const auto prime_element_list = _element_aggregations[D];
         auto nnode = _mesh->nodes().size() / D;
-        std::vector<std::set<std::size_t>> adjacency(nnode);
+		std::size_t expected_bandwidth = 64;
+        std::vector<std::vector<std::size_t>> adjacency(nnode);
+		for(auto& cache: adjacency) {
+			cache.reserve(expected_bandwidth);
+		}
+
         for(auto cell : prime_element_list) {
             const auto& vertex_list = cell.data();
             std::for_each(
                 vertex_list.begin(), 
                 vertex_list.end(),
                 [&](std::size_t ivtx){
-                    adjacency[ivtx].insert(vertex_list.begin(), vertex_list.end());
+                    adjacency[ivtx].insert(adjacency[ivtx].end(), vertex_list.begin(), vertex_list.end());
                 }
             );
         }
-        for(const auto& item: adjacency) {
-            std::vector<std::size_t> v(item.begin(), item.end());
-            this->_adjacent_vertices.push_back(std::move(v));
-        }
+
+		for(auto& cache: adjacency) {
+			// remove duplicated entries
+			std::sort(cache.begin(), cache.end());
+			cache.erase(std::unique(cache.begin(), cache.end()), cache.end());
+			this->_adjacent_vertices.push_back(std::move(cache));
+		}
     }
     private:
     public:

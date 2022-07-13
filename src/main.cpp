@@ -145,49 +145,6 @@ TEST(CSRList, Iterators) {
 	EXPECT_EQ(n_y, x.size());
 }
 
-/*
-TEST(MeshData_read, metis) {
-	MeshData mesh;
-	mesh.read("ien.dat");
-
-	idx_t* vwgt = nullptr;
-	idx_t* vsize = nullptr;
-	idx_t ncommon = 1;
-	idx_t nparts = 4;
-	real_t* tpwgts = nullptr;
-	idx_t objval = 1;
-
-	idx_t options[METIS_NOPTIONS];
-	METIS_SetDefaultOptions(options);
-	options[METIS_OPTION_PTYPE]   = METIS_PTYPE_KWAY;
-	options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
-	options[METIS_OPTION_CTYPE]   = METIS_CTYPE_SHEM;
-	options[METIS_OPTION_IPTYPE]  = METIS_IPTYPE_GROW;
-	options[METIS_OPTION_RTYPE]   = -1;
-	options[METIS_OPTION_DBGLVL]  = 0;
-	options[METIS_OPTION_UFACTOR] = -1;
-	options[METIS_OPTION_MINCONN] = 0;
-	options[METIS_OPTION_CONTIG]  = 0;
-	options[METIS_OPTION_SEED]    = -1;
-	options[METIS_OPTION_NITER]   = 10;
-	options[METIS_OPTION_NCUTS]   = 1;
-	std::vector<idx_t> epart(mesh.ne), npart(mesh.nn);
-	auto status = METIS_PartMeshDual(&(mesh.ne), &(mesh.nn), 
-		mesh.eptr.data(), mesh.eind.data(), 
-		vwgt, vsize, &ncommon, &nparts,
-		tpwgts, options, &objval,
-		epart.data(), npart.data());
-	EXPECT_EQ(status, METIS_OK);
-	std::ofstream fe("ien.epart.dat");
-	for(int i = 0; i < epart.size(); ++i) {
-		fe << epart[i] << "\n";
-	}
-	std::ofstream fn("ien.npart.dat");
-	for(int i = 0; i < npart.size(); ++i) {
-		fn << npart[i] << "\n";
-	}
-}
-*/
 
 #define BOX_MSH
 #ifdef BOX_MSH
@@ -197,7 +154,7 @@ double center[] = {3.7496478658,  -0.005098642278, -0.0188287907804};
 size_t element_num[] = {131753, 0, 3220, 0, 741065, 0, 0, 0, 0};
 #else // defined(SPHERE_MSH)
 const std::string filename = "../re3700.msh";
-int num_entitties[] = {1234222, 7326679};
+int num_entities[] = {1234222, 7326679};
 double center[] = {2.336090445539671,  0.0006215432516590993, 0.00015412152905954366};
 size_t element_num[] = {1234222, 0, 0, 0, 7326679, 0, 0, 0, 0};
 #endif
@@ -257,9 +214,14 @@ TEST(MeshConnectivity, Mesh) {
 	}
 	*/
 
+	auto n3to2 = (element_num[4] and element_num[2] ? element_num[4] : 0);
+	auto n2to3 = (element_num[4] and element_num[2] ? element_num[2] : 0);
+	auto n2to0 = (element_num[2] and element_num[0] ? element_num[2] : 0);
+	auto n0to2 = (element_num[2] and element_num[0] ? element_num[0] : 0);
 	EXPECT_EQ( conn.connectivity(3, 0).size(), mesh.elements(FiniteElementType::Tetrahedron).second.size() );
-	EXPECT_EQ( conn.connectivity(3, 2).size(), mesh.elements(FiniteElementType::Tetrahedron).second.size());
-	EXPECT_EQ( conn.connectivity(2, 0).size(), element_num[2]);
+
+	EXPECT_EQ( conn.connectivity(3, 2).size(), n3to2 );
+	EXPECT_EQ( conn.connectivity(2, 0).size(), n2to0 );
 	bool check_0to2 = true;
 	bool check_0to3 = true;
 	bool check_2to3 = true;
@@ -268,7 +230,7 @@ TEST(MeshConnectivity, Mesh) {
 	if(check_0to2){
 		const auto& map0to2 = conn.connectivity(0, 2);
 		const auto& map2to0 = conn.connectivity(2, 0);
-		ASSERT_EQ(map0to2.size(), mesh.elements(FiniteElementType::Vertex).second.size());
+		ASSERT_EQ(map0to2.size(), n0to2);
 		for(std::size_t ivtx = 0; ivtx < map0to2.size(); ++ivtx) {
 			for(auto ifacet : map0to2[ivtx]) {
 				auto vertex_on_facet = map2to0[ifacet];
@@ -307,6 +269,7 @@ TEST(MeshConnectivity, Mesh) {
 		const auto& map2to3 = conn.connectivity(2, 3);
 		const auto& map2to0 = conn.connectivity(2, 0);
 		const auto& map3to0 = conn.connectivity(3, 0);
+		ASSERT_EQ(map2to3.size(), n2to3);
 		for(std::size_t ifacet = 0; ifacet < map2to3.size(); ++ifacet) {
 			ASSERT_LE(map2to3[ifacet].size(), 2);
 			auto ielem = map2to3[ifacet][0];
@@ -327,6 +290,7 @@ TEST(MeshConnectivity, Mesh) {
 		const auto& map3to2 = conn.connectivity(3, 2);
 		const auto& map2to0 = conn.connectivity(2, 0);
 		const auto& map3to0 = conn.connectivity(3, 0);
+		ASSERT_EQ(map3to2.size(), n3to2);
 		for(std::size_t ielem = 0; ielem < map3to2.size(); ++ielem) {
 			if(map3to2[ielem].empty()) {
 				continue;

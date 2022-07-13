@@ -3,8 +3,6 @@
 
 #include <type_traits>
 #include <vector>
-#include <map>
-#include <set>
 #include "CSRListObject.hpp"
 #include "CSRListIterator.hpp"
 
@@ -149,21 +147,27 @@ template <typename T,
 	template<typename Data = T>
 	std::enable_if_t<std::is_same_v<Data, U> and std::is_integral_v<Data>, CSRList> reverse() const {
 		//TODO: find an inplace reversing method
-		std::map<T, std::vector<T>> _map_tmp;
+		//std::map<T, std::vector<T>> graph_tmp;
+		auto vector_length = 1 + *std::max_element(this->data().begin(), this->data().end());
+		std::vector<std::vector<T>> graph_tmp(vector_length);
+		std::size_t expected_bandwidth = 32;
+		for(auto& cache: graph_tmp) {
+			cache.reserve(expected_bandwidth);
+		}
 		for(auto it = this->begin(); it != this->end(); ++it) {
 			for(auto index : it->data()) {
-				//_map_tmp[index].insert(it->index());
-				_map_tmp[index].push_back(it->index());
+				//graph_tmp[index].insert(it->index());
+				graph_tmp[index].push_back(it->index());
 			}
 		}
 
 		CSRList results;
-		auto max_index = (_map_tmp.size() ? _map_tmp.rbegin()->first : 0); // an ordered map stores the largest index in the end
+		auto max_index = (graph_tmp.size() ? graph_tmp.size() - 1: 0); // an ordered map stores the largest index in the end
 		for(Data i = 0; i <= max_index and max_index != 0; ++i) {
-			const auto it = _map_tmp.find(i);
-			if(it != _map_tmp.end()) {
+			const auto it = graph_tmp.begin() + i;
+			if(it != graph_tmp.end() and it->size() > 0) {
 				//auto v = std::vector<Data>(it->second.begin(), it->second.end());
-				results.push_back(it->second);
+				results.push_back(*it);
 			}
 			else {
 				results.push_back(std::vector<Data>({}));
