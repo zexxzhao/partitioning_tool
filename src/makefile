@@ -18,4 +18,4 @@ main.o: main.cpp
 
 -include main.d
 clean:
-	rm *.o *.d mp
+	rm *.o *.d mp *.h5

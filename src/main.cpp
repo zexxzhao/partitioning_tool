@@ -201,9 +201,11 @@ TEST(MeshIO, Mesh) {
 
 TEST(MeshConnectivity, Mesh) {
 	Mesh<3> mesh;
-	MeshIO::read<3>(mesh, filename);
+	MeshIO::read(mesh, filename);
 
-	MeshConnectivity<3> conn(mesh);
+	//MeshConnectivity conn(mesh);
+	auto& conn = mesh;
+	conn.init();
 	/*
 	for(std::size_t i = 0; i <= 3; ++i) {
 		for(std::size_t j = 0; j <= 3; ++j) {
@@ -337,6 +339,8 @@ TEST(MeshConnectivity, Mesh) {
 			auto cell = conn.element_collections(3)[element_id[0]];
 			const auto& orientation = conn.orientation()[facet_id];
 			auto facet_orientation = orientation[0];
+			EXPECT_LE(0, facet_orientation);
+			EXPECT_LE(facet_orientation, 3);
 			//std::printf("facet[%zu]: %zu %zu %zu\n", facet_id, facet[0], facet[1], facet[2]); 
 			//std::printf("cell[%zu]:  %zu %zu %zu %zu\n", element_id[0], cell[0], cell[1], cell[2], cell[3]);
 			//std::printf("facet_orientation: %zu\n", facet_orientation);
@@ -346,8 +350,9 @@ TEST(MeshConnectivity, Mesh) {
 
 TEST(MeshPartitioner, partitioning) {
 	Mesh<3> mesh;
-	MeshIO::read<3>(mesh, filename);
-	MeshPartitioner part(mesh);
+	MeshIO::read(mesh, filename);
+	//MeshPartitioner part(mesh);
+	auto& part = mesh;
 	auto num_parts = 4;
 	part.metis(num_parts);
 	int ne = 0, nn = 0;

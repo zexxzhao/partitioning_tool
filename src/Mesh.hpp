@@ -10,73 +10,16 @@
 #include "CSRList.hpp"
 #include "ElementSpace.hpp"
 
-template<int D>
-struct Mesh
+template <typename Derived> struct MeshConnectivity {};
+
+template<template<int> typename DerivedClass, int D>
+struct MeshConnectivity<DerivedClass<D>>
 {
-    using MeshElementInfo = std::pair<CSRList<std::size_t>, std::vector<std::size_t>>;
-    using FiniteElementType = typename ElementSpace<D>::Type;
 
-    Mesh() {
-        nodes().clear();
-        type_offset().clear();
-        ElementSpace<3> space;
-        type_offset().reserve(ElementSpace<D>().all_element_types().size());
-        type_offset().push_back(0);
-    }
+	using Derived = DerivedClass<D>;
+    MeshConnectivity(const Derived& mesh) : _mesh(&mesh), _element_aggregations(D+1) {}
 
-    static constexpr int dim() { 
-        return D;
-    }
-
-    const Mesh& operator=(const Mesh&) = delete;
-
-    const std::vector<double>& nodes() const noexcept { return _nodes; }
-    std::vector<double>& nodes() noexcept { return _nodes; }
-
-    MeshElementInfo& elements() noexcept { return _elements; }
-    const MeshElementInfo& elements() const noexcept { return _elements; }
-
-    MeshElementInfo elements(FiniteElementType type) const noexcept {
-            auto [begin_index, end_index] = type_offset(type);
-            const auto& [element_connectivity, element_ID] = elements();
-            CSRList<std::size_t> local_element_connectivity(
-                element_connectivity.begin() + begin_index, 
-                element_connectivity.begin() + end_index);
-            std::vector<std::size_t> local_element_ID(
-                element_ID.begin() + begin_index, 
-                element_ID.begin() + end_index);
-            return {local_element_connectivity, local_element_ID};
-    }
-    std::pair<std::size_t, std::size_t> type_offset(FiniteElementType type) const { 
-        auto i = static_cast<std::size_t>(type);
-        return {type_offset()[i], type_offset()[i + 1]};
-    }
-
-    const std::vector<std::size_t>& type_offset() const noexcept {
-        return _element_type_offset;
-    }
-
-    std::vector<std::size_t>& type_offset() noexcept {
-        return _element_type_offset;
-    }
-
-    private:
-
-    private:
-    std::vector<double> _nodes;
-    MeshElementInfo _elements;
-    std::vector<std::size_t> _element_type_offset;
-
-    friend class MeshIO;
-    //friend class MeshConnectivity;
-
-};
-
-// not using CRTP because MeshConnectivity<> workd for Mesh<> only
-template<int D>
-struct MeshConnectivity
-{
-    MeshConnectivity(Mesh<D>& mesh) : _mesh(&mesh), _element_aggregations(D+1) {
+	void init() {
         for (std::size_t i = 0; i <= D; ++i) {
             _collect_mesh_entities(i);
         }
@@ -288,14 +231,17 @@ struct MeshConnectivity
     std::map<Key, CSRList<std::size_t>, Cmp> _connectivity;
     CSRList<std::size_t> _adjacent_vertices;
 	CSRList<std::size_t> _orientation;
-    Mesh<D> * _mesh;
+    const Derived * _mesh;
 
 };
 
-template<int D>
-struct MeshPartitioner
+template<typename DerivedClass> struct MeshPartitioner {};
+
+template<template <int >typename DerivedClass, int D>
+struct MeshPartitioner<DerivedClass<D>>
 {
-    MeshPartitioner(const Mesh<D>& mesh): _mesh(&mesh) {}
+	using Derived = DerivedClass<D>;
+    MeshPartitioner(const Derived& mesh): _mesh(&mesh) {}
 
 
     const std::vector<idx_t>& partition(std::size_t rank, const std::string& mode = "e") const {
@@ -374,10 +320,77 @@ struct MeshPartitioner
 		}
     }
     private:
-    const Mesh<D>* _mesh;
+    const Derived* _mesh;
 	std::size_t _num_parts;
     std::vector<std::vector<idx_t>> _element_partitioning;
     std::vector<std::vector<idx_t>> _node_partitioning;
 };
+
+template<int D>
+struct Mesh : public MeshConnectivity<Mesh<D>>, public MeshPartitioner<Mesh<D>>
+{
+    using MeshElementInfo = std::pair<CSRList<std::size_t>, std::vector<std::size_t>>;
+    using FiniteElementType = typename ElementSpace<D>::Type;
+
+	//using MeshConnectivity<Mesh<D>>::MeshConnectivity;
+	//using MeshPartitioner<Mesh<D>>::MeshPartitioner;
+    Mesh() : MeshConnectivity<Mesh<D>>(*this), MeshPartitioner<Mesh<D>>(*this) {
+        nodes().clear();
+        type_offset().clear();
+        ElementSpace<3> space;
+        type_offset().reserve(ElementSpace<D>().all_element_types().size());
+        type_offset().push_back(0);
+    }
+
+    static constexpr int dim() { 
+        return D;
+    }
+
+    const Mesh& operator=(const Mesh&) = delete;
+
+    const std::vector<double>& nodes() const noexcept { return _nodes; }
+    std::vector<double>& nodes() noexcept { return _nodes; }
+
+    MeshElementInfo& elements() noexcept { return _elements; }
+    const MeshElementInfo& elements() const noexcept { return _elements; }
+
+    MeshElementInfo elements(FiniteElementType type) const noexcept {
+            auto [begin_index, end_index] = type_offset(type);
+            const auto& [element_connectivity, element_ID] = elements();
+            CSRList<std::size_t> local_element_connectivity(
+                element_connectivity.begin() + begin_index, 
+                element_connectivity.begin() + end_index);
+            std::vector<std::size_t> local_element_ID(
+                element_ID.begin() + begin_index, 
+                element_ID.begin() + end_index);
+            return {local_element_connectivity, local_element_ID};
+    }
+    std::pair<std::size_t, std::size_t> type_offset(FiniteElementType type) const { 
+        auto i = static_cast<std::size_t>(type);
+        return {type_offset()[i], type_offset()[i + 1]};
+    }
+
+    const std::vector<std::size_t>& type_offset() const noexcept {
+        return _element_type_offset;
+    }
+
+    std::vector<std::size_t>& type_offset() noexcept {
+        return _element_type_offset;
+    }
+
+	void init() {
+		MeshConnectivity<Mesh<D>>::init();
+	}
+    private:
+
+    private:
+    std::vector<double> _nodes;
+    MeshElementInfo _elements;
+    std::vector<std::size_t> _element_type_offset;
+
+    friend class MeshIO;
+
+};
+
 
 #endif // __MESH_H__

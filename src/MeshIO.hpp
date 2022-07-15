@@ -6,6 +6,7 @@
 #include <map>
 #include <numeric>
 
+#include <highfive/H5File.hpp>
 #include "Mesh.hpp"
 
 struct MeshIO
@@ -27,7 +28,7 @@ struct MeshIO
     }
 
 	template<int D>
-	static int write(const MeshPartitioner<D>& mesh, const std::string& filename) {
+	static int write(const Mesh<D>& mesh, const std::string& filename) {
         // get the extension
         auto ext = filename.substr(filename.find_last_of('.') + 1);
 		if(ext == "h5" or ext == ".hdf5") {
@@ -220,7 +221,7 @@ struct MeshIO
 		return -2;
 	}
 	template<int D>
-	static int _write_h5(const MeshPartitioner<D>& mesh) {
+	static int _write_h5(const Mesh<D>& mesh) {
 		return -1;
 	}
     template <int D>
