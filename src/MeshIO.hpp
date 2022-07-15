@@ -18,13 +18,23 @@ struct MeshIO
 
     template<int D>
     static int read(Mesh<D>& mesh, const std::string& filename, MshGenerator type = MshGenerator::GMSH) {
-        // parse the filename and get the extension
+        // get the extension
         auto ext = filename.substr(filename.find_last_of('.') + 1);
         if(ext == "msh" or ext == "gmsh") {
             return _read_gmsh(mesh, filename, type);
         }
         return -1;
     }
+
+	template<int D>
+	static int write(const MeshPartitioner<D>& mesh, const std::string& filename) {
+        // get the extension
+        auto ext = filename.substr(filename.find_last_of('.') + 1);
+		if(ext == "h5" or ext == ".hdf5") {
+			_write_h5(mesh);
+		}
+		return -1;
+	}
 
     private:
     template<typename T> 
@@ -172,6 +182,11 @@ struct MeshIO
                 p = str_parsing(p, node_list[j]);
                 node_list[j]--;
             }
+
+			// for Pyramid element, renumbering by swap node_list[2] and node_list[3]
+			if (element_type == FiniteElementType::Pyramid) {
+				std::swap(node_list[2], node_list[3]);
+			}
             element_node_list.push_back(node_list);
         }
 
@@ -203,6 +218,10 @@ struct MeshIO
 	static int _read_gmsh41(Mesh<D>& mesh, std::ifstream& fmesh, MshGenerator type = MshGenerator::GMSH) {
 		std::cerr << "Not implemented: " << __func__ << std::endl;
 		return -2;
+	}
+	template<int D>
+	static int _write_h5(const MeshPartitioner<D>& mesh) {
+		return -1;
 	}
     template <int D>
     static constexpr int _num_vertices(typename ElementSpace<D>::Type element_type) {

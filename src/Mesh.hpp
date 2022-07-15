@@ -82,6 +82,7 @@ struct MeshConnectivity
         }
         _build_all_connectivity();
         _build_vertex_adjacency_list();
+		_build_orientation_of_subentities();
     }
 
     const CSRList<std::size_t>& connectivity(std::size_t dim0, std::size_t dim1) const { 
@@ -91,6 +92,14 @@ struct MeshConnectivity
     const CSRList<std::size_t>& adjacent_vertices() const {
         return _adjacent_vertices;
     }
+
+	const CSRList<std::size_t>& element_collections(int dim) const {
+		return this->_element_aggregations[dim];
+	}
+
+	const CSRList<std::size_t>& orientation() const {
+		return this->_orientation;
+	}
 
     private:
     void _collect_mesh_entities(std::size_t dim) {
@@ -225,6 +234,48 @@ struct MeshConnectivity
 			this->_adjacent_vertices.push_back(std::move(cache));
 		}
     }
+
+	static std::vector<std::size_t> _get_child_indices_in_parent(
+			const std::vector<std::size_t>& child,
+			const std::vector<std::size_t>& parent) {
+		std::vector<std::size_t> indices;
+		indices.reserve(child.size());
+		for(std::size_t i = 0; indices.size() < child.size() and i < child.size(); ++i) {
+			for(std::size_t j = 0; j < parent.size(); ++j) {
+				if(child[i] == parent[j]) {
+					indices.push_back(j);
+					break;
+				}
+			}
+		}
+		return (indices.size() == child.size() ? indices : std::vector<std::size_t>());
+	}
+
+	void _build_orientation_of_subentities() {
+		const auto& prime_element_list = element_collections(D);
+		const auto& secondary_element_list = element_collections(D - 1);
+		const auto& subentity_to_entity = connectivity(D - 1, D);
+		for(std::size_t i = 0; i < subentity_to_entity.size(); ++i) {
+			auto subentity_global_indices = secondary_element_list[i];
+			auto base_entity_ID = subentity_to_entity[i];
+			std::vector<std::size_t> subentity_orientation;
+			subentity_orientation.reserve(1);
+			for(auto idx : base_entity_ID) {
+				const auto& base_entity_global_list = prime_element_list[idx];
+				const auto& subentity_local_indices = _get_child_indices_in_parent(
+						subentity_global_indices,
+						base_entity_global_list
+					);
+				assert(not subentity_local_indices.empty());
+				auto type = ElementSpace<D>::element_type(base_entity_global_list.size());
+				auto orientation = ElementNumbering::subentity_indices(type, subentity_local_indices);
+				assert(orientation < 8);
+				subentity_orientation.push_back(orientation);
+			}
+
+			this->_orientation.push_back(subentity_orientation);
+		}
+	}
     private:
     public:
     std::vector<CSRList<std::size_t>> _element_aggregations;
@@ -236,6 +287,7 @@ struct MeshConnectivity
     };
     std::map<Key, CSRList<std::size_t>, Cmp> _connectivity;
     CSRList<std::size_t> _adjacent_vertices;
+	CSRList<std::size_t> _orientation;
     Mesh<D> * _mesh;
 
 };
@@ -256,66 +308,74 @@ struct MeshPartitioner
     }
 
     void metis(idx_t num_parts = 4){
-        idx_t num_nodes = _mesh->nodes().size() / D;
-        const auto& elements = _mesh->elements();
-        const auto prime_element_type = ElementSpace<D>().prime_element_types();
-        CSRList<std::size_t> prime_element_list;
-        std::for_each(prime_element_type.begin(), prime_element_type.end(),
-            [&](FiniteElementType type) {
-                prime_element_list += std::move(this->_mesh->elements(type).first);
-            }
-        );
-        idx_t num_elements = prime_element_list.size();
-        std::vector<idx_t> element_array(prime_element_list.data().begin(), prime_element_list.data().end());
-        std::vector<idx_t> element_offset(prime_element_list.offset().begin(), prime_element_list.offset().end());
+		_num_parts = num_parts;
+		// calculate numbers of nodes and elements
+		idx_t num_nodes = _mesh->nodes().size() / D;
+		const auto& elements = _mesh->elements();
+		const auto prime_element_type = ElementSpace<D>().prime_element_types();
+		CSRList<std::size_t> prime_element_list;
+		std::for_each(prime_element_type.begin(), prime_element_type.end(),
+			[&](FiniteElementType type) {
+				prime_element_list += std::move(this->_mesh->elements(type).first);
+			}
+		);
+		idx_t num_elements = prime_element_list.size();
+        _element_partitioning.resize(_num_parts);
+        _node_partitioning.resize(_num_parts);
+
+		if(_num_parts >= 2) {
+			std::vector<idx_t> element_array(prime_element_list.data().begin(), prime_element_list.data().end());
+			std::vector<idx_t> element_offset(prime_element_list.offset().begin(), prime_element_list.offset().end());
 
 
-        idx_t* vwgt = nullptr;
-        idx_t* vsize = nullptr;
-        idx_t ncommon = 1;
+			idx_t* vwgt = nullptr;
+			idx_t* vsize = nullptr;
+			idx_t ncommon = 1;
 
-        real_t* tpwgts = nullptr;
-        idx_t objval = 1;
+			real_t* tpwgts = nullptr;
+			idx_t objval = 1;
 
-        idx_t options[METIS_NOPTIONS];
-        METIS_SetDefaultOptions(options);
-        options[METIS_OPTION_PTYPE]   = METIS_PTYPE_KWAY;
-        options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
-        options[METIS_OPTION_CTYPE]   = METIS_CTYPE_SHEM;
-        options[METIS_OPTION_IPTYPE]  = METIS_IPTYPE_GROW;
-        options[METIS_OPTION_RTYPE]   = -1;
-        options[METIS_OPTION_DBGLVL]  = 0;
-        options[METIS_OPTION_UFACTOR] = -1;
-        options[METIS_OPTION_MINCONN] = 0;
-        options[METIS_OPTION_CONTIG]  = 0;
-        options[METIS_OPTION_SEED]    = -1;
-        options[METIS_OPTION_NITER]   = 10;
-        options[METIS_OPTION_NCUTS]   = 1;
-        std::vector<idx_t> epart(num_elements), npart(num_nodes);
-        //_epart.resize(num_nodes);
-        //_npart.resize(num_elements);
-        auto status = METIS_PartMeshDual(&num_elements, &num_nodes, 
-            //mesh.eptr.data(), mesh.eind.data(), 
-            element_offset.data(), element_array.data(),
-            vwgt, vsize, &ncommon, &num_parts,
-            tpwgts, options, &objval,
-            epart.data(), npart.data()
-        );
-        assert(status == METIS_OK);
-
-        _element_partitioning.resize(num_parts);
-        _node_partitioning.resize(num_parts);
-        for(std::size_t i = 0; i < epart.size(); ++i) {
-            auto rank = epart[i];
-            _element_partitioning[rank].push_back(i);
-        }
-        for(std::size_t i = 0; i < npart.size(); ++i) {
-            auto rank = npart[i];
-            _node_partitioning[rank].push_back(i);
-        }
+			idx_t options[METIS_NOPTIONS];
+			METIS_SetDefaultOptions(options);
+			options[METIS_OPTION_PTYPE]   = METIS_PTYPE_KWAY;
+			options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
+			options[METIS_OPTION_CTYPE]   = METIS_CTYPE_SHEM;
+			options[METIS_OPTION_IPTYPE]  = METIS_IPTYPE_GROW;
+			options[METIS_OPTION_RTYPE]   = -1;
+			options[METIS_OPTION_DBGLVL]  = 0;
+			options[METIS_OPTION_UFACTOR] = -1;
+			options[METIS_OPTION_MINCONN] = 0;
+			options[METIS_OPTION_CONTIG]  = 0;
+			options[METIS_OPTION_SEED]    = -1;
+			options[METIS_OPTION_NITER]   = 10;
+			options[METIS_OPTION_NCUTS]   = 1;
+			// buffer for element and node attributions
+			std::vector<idx_t> epart(num_elements), npart(num_nodes);
+			auto status = METIS_PartMeshDual(&num_elements, &num_nodes, 
+				//mesh.eptr.data(), mesh.eind.data(), 
+				element_offset.data(), element_array.data(),
+				vwgt, vsize, &ncommon, &num_parts,
+				tpwgts, options, &objval,
+				epart.data(), npart.data()
+			);
+			assert(status == METIS_OK);
+			for(std::size_t i = 0; i < epart.size(); ++i) {
+				auto rank = epart[i];
+				_element_partitioning[rank].push_back(i);
+			}
+			for(std::size_t i = 0; i < npart.size(); ++i) {
+				auto rank = npart[i];
+				_node_partitioning[rank].push_back(i);
+			}
+		}
+		else {
+			std::iota(_element_partitioning[0].begin(), _element_partitioning[0].end(), 0);
+			std::iota(_node_partitioning[0].begin(), _node_partitioning[0].end(), 0);
+		}
     }
     private:
     const Mesh<D>* _mesh;
+	std::size_t _num_parts;
     std::vector<std::vector<idx_t>> _element_partitioning;
     std::vector<std::vector<idx_t>> _node_partitioning;
 };

@@ -1,4 +1,6 @@
 #include <cstddef>
+#include <ctime>
+#include <cstdlib>
 
 #include <iostream> 
 #include <fstream>
@@ -9,7 +11,7 @@
 
 #include <metis.h>
 #include <gtest/gtest.h>
-
+#include <highfive/H5File.hpp>
 #include "CSRList.hpp"
 #include "ElementSpace.hpp"
 #include "Mesh.hpp"
@@ -227,6 +229,7 @@ TEST(MeshConnectivity, Mesh) {
 	bool check_2to3 = true;
 	bool check_3to2 = true;
 	bool check_vtx_connectivity = true;
+	bool check_facet_orientation = true;
 	if(check_0to2){
 		const auto& map0to2 = conn.connectivity(0, 2);
 		const auto& map2to0 = conn.connectivity(2, 0);
@@ -323,6 +326,22 @@ TEST(MeshConnectivity, Mesh) {
 			EXPECT_EQ(map0.offset()[i], map1.offset()[i]);
 		}
 	}
+	if(check_facet_orientation) {
+		//std::srand(std::time(0));
+		std::size_t facet_id = rand() % 100;
+		auto facet_elements = conn.element_collections(2);
+		if(facet_elements.size() > 0) {
+			auto facet = facet_elements[facet_id];
+			auto element_id = conn.connectivity(2, 3)[facet_id];
+			ASSERT_EQ(element_id.size(), 1);
+			auto cell = conn.element_collections(3)[element_id[0]];
+			const auto& orientation = conn.orientation()[facet_id];
+			auto facet_orientation = orientation[0];
+			//std::printf("facet[%zu]: %zu %zu %zu\n", facet_id, facet[0], facet[1], facet[2]); 
+			//std::printf("cell[%zu]:  %zu %zu %zu %zu\n", element_id[0], cell[0], cell[1], cell[2], cell[3]);
+			//std::printf("facet_orientation: %zu\n", facet_orientation);
+		}
+	}
 }
 
 TEST(MeshPartitioner, partitioning) {
@@ -339,6 +358,19 @@ TEST(MeshPartitioner, partitioning) {
 	EXPECT_EQ(ne, element_num[4]);
 	EXPECT_EQ(nn, num_entities[0]);
 }
+
+TEST(H5, IO) {
+	namespace h5=HighFive;
+	h5::File file("./v.h5", h5::File::ReadWrite | h5::File::Create | h5::File::Truncate );
+	std::vector<double> d0(50, 1.2);
+	std::vector<std::size_t> d1(24, 3);
+	auto dataset0 = file.createDataSet<typename decltype(d0)::value_type>("/cpu1/float", h5::DataSpace::From(d0));
+	dataset0.write(d0);
+	auto dataset1 = file.createDataSet<typename decltype(d1)::value_type>("/cpu1/integer", h5::DataSpace::From(d1));
+	dataset1.write(d1);
+}
+
+
 int main(int argc, char* argv[] ){
 	testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();

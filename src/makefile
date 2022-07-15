@@ -6,12 +6,12 @@ FLAGS=-std=c++17
 FLAGS+=-O3 -g 
 #FLAGS+=-pg 
 #FLAGS+=-fsanitize=address
-CC=g++
+CC=mpicxx
 
 all: mp
 
 mp: main.o
-	${CC} ${FLAGS} main.o -o mp -lmetis -lgtest -lpthread 
+	${CC} ${FLAGS} main.o -o mp -lmetis -lgtest -lpthread -lhdf5
 
 main.o: main.cpp
 	${CC} ${FLAGS} -MMD -c main.cpp
