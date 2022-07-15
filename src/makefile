@@ -1,20 +1,20 @@
-#INC=-I/home/zezhao/workdir/partitioning_tool/metis-5.1.0/GKlib -I/home/zezhao/workdir/partitioning_tool/metis-install/include -I/home/zezhao/usr/local/googletest/googletest/include/
-#INC=-I/home/zezhao/usr/local/metis-5.1.0/include -I/home/zezhao/usr/local/gtest/include/
-#LIBS=-L/home/zezhao/usr/local/metis-5.1.0/lib/ -L/home/zezhao/usr/local/gtest/lib/
+
+CC=mpicc
+CXX=mpicxx
 
 FLAGS=-std=c++17
-FLAGS+=-O3 -g 
+FLAGS+=-O2 -g 
+FLAGS+=-fopenmp
 #FLAGS+=-pg 
 #FLAGS+=-fsanitize=address
-CC=mpicxx
 
 all: mp
 
 mp: main.o
-	${CC} ${FLAGS} main.o -o mp -lmetis -lgtest -lpthread -lhdf5
+	${CXX} ${FLAGS} main.o -o mp -lmetis -lgtest -lpthread -lhdf5
 
 main.o: main.cpp
-	${CC} ${FLAGS} -MMD -c main.cpp
+	${CXX} ${FLAGS} -MMD -c main.cpp
 
 -include main.d
 clean:
