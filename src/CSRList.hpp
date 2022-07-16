@@ -6,6 +6,8 @@
 #include "CSRListObject.hpp"
 #include "CSRListIterator.hpp"
 
+#include "GraphConverter.hpp"
+
 
 template <typename T = std::size_t, typename U = T, typename std::enable_if_t<std::is_integral_v<U> or std::is_enum_v<U>>* Dummy_value = nullptr > struct CSRList;
 
