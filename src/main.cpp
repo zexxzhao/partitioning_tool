@@ -357,8 +357,8 @@ TEST(MeshPartitioner, partitioning) {
 	part.metis(num_parts);
 	int ne = 0, nn = 0;
 	for(int i = 0; i < num_parts; ++i) {
-		ne += part.partition(i, "e").size();
-		nn += part.partition(i, "n").size();
+		ne += part.part(i, "e").size();
+		nn += part.part(i, "n").size();
 	}
 	EXPECT_EQ(ne, element_num[4]);
 	EXPECT_EQ(nn, num_entities[0]);

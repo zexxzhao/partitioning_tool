@@ -95,12 +95,17 @@ template <typename T,
 		return data(index);
 	}
 
-    void push_back(const std::vector<T>& entity) {
+	template<typename Other>
+	std::common_type_t<T, Other>
+    push_back(const std::vector<Other>& entity) {
         data().insert(data().end(), entity.begin(), entity.end());
         offset().push_back(data().size());
+		return {};
     }
 
-    void push_back(std::vector<T>&& entity) {
+	template <typename Other>
+	std::common_type_t<T, Other>
+    push_back(std::vector<T>&& entity) {
 		if(data().empty()) {
 			data() = std::move(entity);
 		}
@@ -111,6 +116,7 @@ template <typename T,
 			entity.clear();
 		}
 		offset().push_back(data().size());
+		return {};
     }
 
 	auto operator+(const CSRList& list) const {
