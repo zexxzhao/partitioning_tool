@@ -1,6 +1,7 @@
 #ifndef __MESH_PARTITIONER_H__
 #define __MESH_PARTITIONER_H__
 #include "CSRList.hpp"
+#include "Reorder.hpp"
 #include "ElementSpace.hpp"
 
 
@@ -20,7 +21,8 @@ struct MeshPartitioner<DerivedClass<D>>
 		else if(mode == "n"){
 			return this->_node_attribution;
 		}
-		return {};
+		assert(mode == "e" or mode == "n");
+		return this->_node_attribution;
 	}
 	std::pair<std::vector<std::size_t>, std::vector<std::size_t>>
 		part(std::size_t rank) const {
@@ -38,7 +40,7 @@ struct MeshPartitioner<DerivedClass<D>>
 		return {};
     }
 
-    void metis(idx_t num_parts = 4){
+    void metis(idx_t num_parts = 4) {
 		_num_parts = num_parts;
 		// calculate numbers of nodes and elements
 		idx_t num_nodes = _mesh->nodes().size() / D;
@@ -117,7 +119,27 @@ struct MeshPartitioner<DerivedClass<D>>
 				});
 
     }
+	// renumbering
+	bool apply() {
+		boo status;
+		// identity ghost nodes
+		std::vector<bool> is_ghosted();
+		status = 
+		// renumbering nodes
+		//
+		// build nodal l2g
+		// build cellar l2g
+	}
     private:
+	std::vector<std::size_t> _collect_nodes(std::size_t rank) const {
+		auto local_elements = _element_attribution[rank];
+		auto local_nodes = _node_partitioning[rank];
+
+		std::vector<std::size_t> all_local_nodes;
+		for(auto cell : _mesh->elements()) {
+			
+		}
+	}
     const Derived* _mesh;
 	std::size_t _num_parts;
 	CSRList<std::size_t> _element_attribution;

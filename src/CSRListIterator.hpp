@@ -8,12 +8,13 @@ template <typename List> struct CSRListObject;
 
 template<typename List, 
 	typename data_type = typename List::data_type, 
-	typename size_type = typename List::size_type> 
+	typename size_type = typename List::size_type,
+	typename directed_tag = typename List::directed_category> 
 struct CSRListIterator
 {
 
 	CSRListIterator(List& list, size_type index = static_cast<size_type>(0)) :
-		_plist(&list), _begin(static_cast<size_type>(0)), _end(list.num_entities()), _counter(index), _object(*_plist, _counter) {}
+		_plist(&list), _begin(0), _end(list.num_entities()), _counter(index), _object(*_plist, _counter) {}
     
 	CSRListIterator(const CSRListIterator<List>& iterator) :
 		_plist(iterator._plist), _begin(iterator._begin), _end(iterator._end), _counter(iterator._counter), _object(*_plist, _counter) {}

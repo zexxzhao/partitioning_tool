@@ -9,8 +9,9 @@
 #include "GraphConverter.hpp"
 
 
-template <typename T = std::size_t, typename U = T, typename std::enable_if_t<std::is_integral_v<U> or std::is_enum_v<U>>* Dummy_value = nullptr > struct CSRList;
+//template <typename T, typename U = T, typename directed_category> struct CSRList {};
 
+/*
 template <typename List> struct is_CSRList : std::false_type {};
 template <typename T, typename U> struct is_CSRList<CSRList<T, U> > : std::true_type {};
 template <typename T, typename U> struct is_CSRList<const CSRList<T, U> > : std::true_type {};
@@ -18,17 +19,15 @@ template <typename T, typename U> struct is_CSRList<volatile CSRList<T, U> > : s
 template <typename T, typename U> struct is_CSRList<const volatile CSRList<T, U> > : std::true_type {};
 
 template<typename List> inline constexpr bool is_CSRList_v = is_CSRList<List>::value;
+*/
 
-
-template <typename T,
-    typename U,
-    typename std::enable_if_t<std::is_integral_v<U> or std::is_enum_v<U>>* Dummy_value>
-    struct CSRList
+template <typename T, typename U = T, typename DirectedCategory = std::true_type>
+struct CSRList
 {
     using data_type = T;
     using size_type = U;
-	using dummy_type = typename std::enable_if<std::is_integral<U>::value>::type*;
-	using const_Iterator = CSRListIterator<const CSRList<T, U, Dummy_value>>;
+	using directed_category = DirectedCategory;
+	using const_iterator = CSRListIterator<const CSRList<T, U, DirectedCategory>>;
 
 	CSRList() : _data(0), _offset(1, 0) {}
 
@@ -38,19 +37,19 @@ template <typename T,
 	CSRList(std::vector<T>&& data, std::vector<U>&& index_element_range) noexcept :
 		_data(std::move(data)), _offset(std::move(index_element_range)) {}
 
-	CSRList(const_Iterator begin, const_Iterator end) : CSRList() {
+	CSRList(const_iterator begin, const_iterator end) : CSRList() {
 		for(auto it = begin; it != end; ++it) {
 			this->push_back(it->data());
 		}
 	}
 
-	CSRList(const CSRList<T, U, Dummy_value>& csrlist) : 
+	CSRList(const CSRList<T, U>& csrlist) : 
 		CSRList(csrlist._data, csrlist._offset) {}
 
-	CSRList(CSRList<T, U, Dummy_value>&& csrlist) noexcept : 
+	CSRList(CSRList<T, U>&& csrlist) noexcept : 
 		CSRList(std::move(csrlist._data), std::move(csrlist._offset)) {}
 
-	const CSRList<T, U, Dummy_value>& operator=(const CSRList<T, U, Dummy_value>& csrlist) {
+	const CSRList<T, U>& operator=(const CSRList<T, U>& csrlist) {
 		if(this != &csrlist) {
 			_data = csrlist._data;
 			_offset = csrlist._offset;
@@ -58,7 +57,7 @@ template <typename T,
 		return *this;
 	}
 
-	const CSRList<T, U, Dummy_value>& operator=(CSRList<T, U, Dummy_value>&& csrlist) noexcept {
+	const CSRList<T, U>& operator=(CSRList<T, U>&& csrlist) noexcept {
 		if(this != &csrlist) {
 			_data = std::move(csrlist._data);
 			_offset = std::move(csrlist._offset);
@@ -140,15 +139,15 @@ template <typename T,
 		return num_entities();
 	}
 
-	const_Iterator iterator(size_type index) const {
-		return const_Iterator(*this, index);
+	const_iterator iterator(size_type index) const {
+		return const_iterator(*this, index);
 	}
 
-	const_Iterator begin() const {
+	const_iterator begin() const {
         return iterator(0);
 	}
 
-    const_Iterator end() const {
+    const_iterator end() const {
         return iterator(num_entities());
     }
 
@@ -208,7 +207,6 @@ template <typename T,
 	std::vector<data_type> _data;
 	std::vector<size_type> _offset;
 };
-
 
 
 #endif // __CSRLIST_H__

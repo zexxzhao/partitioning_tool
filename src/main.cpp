@@ -147,6 +147,30 @@ TEST(CSRList, Iterators) {
 	EXPECT_EQ(n_y, x.size());
 }
 
+TEST(Reorder, Graph) {
+	using size_type = std::size_t;
+	std::vector<size_type> data = {
+		3,5,
+		2,4,6,9,
+		3,4,
+		5,8,
+		6,
+		6,7,
+		7};
+	std::vector<size_type> offset{0,2,6,8,10,11,13,14};
+
+	CSRList<size_t, size_t, std::false_type> list0(data, offset);
+
+	reordering::BandwidthReduction band(list0);
+
+	auto permution = band();
+	std::vector<size_type> results{0, 8, 5, 7, 3, 6, 4, 2, 1, 9};
+
+	EXPECT_EQ(permution.size(), results.size());
+	for(size_type i = 0; i < results.size(); ++i) {
+		EXPECT_EQ(permution[i], results[i]);
+	}
+}
 
 #define BOX_MSH
 #ifdef BOX_MSH
