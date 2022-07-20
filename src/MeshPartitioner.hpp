@@ -120,24 +120,14 @@ struct MeshPartitioner<DerivedClass<D>>
 
     }
 	// renumbering
-	bool apply() {
-		boo status;
-		// identity ghost nodes
-		std::vector<bool> is_ghosted();
-		status = 
-		// renumbering nodes
-		//
-		// build nodal l2g
-		// build cellar l2g
-	}
     private:
 	std::vector<std::size_t> _collect_nodes(std::size_t rank) const {
 		auto local_elements = _element_attribution[rank];
-		auto local_nodes = _node_partitioning[rank];
+		auto local_nodes = _node_attribution[rank];
 
 		std::vector<std::size_t> all_local_nodes;
 		for(auto cell : _mesh->elements()) {
-			
+
 		}
 	}
     const Derived* _mesh;
