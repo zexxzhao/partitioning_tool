@@ -92,7 +92,7 @@ struct CSRList
 		return _offset;
 	}
 
-	std::vector<T> operator[](size_t index) const {
+	std::vector<data_type> operator[](size_t index) const {
 		return data(index);
 	}
 

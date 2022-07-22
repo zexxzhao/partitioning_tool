@@ -158,9 +158,11 @@ struct MeshPartitioner<DerivedClass<D>>
 
 		std::sort(owned_local_nodes.begin(), owned_local_nodes.end());
 		
-		for(auto it = nodes.cbegin(), it_owned = owned_local_nodes.cbegin(); it != nodes.cend(); ++it) {
-			it_owned = std::lower_bound(it_owned, owned_local_nodes.cend(), *it);
-			ghosted[std::distance(nodes.cbegin(), it)] = *it_owned != *it;
+		for(auto it = nodes.cbegin(); it != nodes.cend(); ++it) {
+			auto it_owned = std::find(owned_local_nodes.cbegin(), owned_local_nodes.cend(), *it);
+			auto key = std::distance(nodes.cbegin(), it);
+			auto value = it_owned == owned_local_nodes.cend();
+			ghosted[key] = value;
 		}
 
 		return ghosted;
@@ -222,6 +224,8 @@ struct MeshPartitioner<DerivedClass<D>>
 
 		std::for_each(local_elements.data().begin(), local_elements.data().end(),
 				[&](std::size_t& a){ a = g2l[a]; });
+		
+		// build an old-to-new mapping
 		//
 		//	vertex connectivity
 		//
@@ -230,12 +234,21 @@ struct MeshPartitioner<DerivedClass<D>>
 
 		// permute to ensure ghosted nodes come last
 		auto ghosted = _find_ghosted_node(rank, nodal_local_to_global);
-		auto num_ghosted_nodes = std::accumulate(ghosted.cbegin(), ghosted.cend(), static_cast<std::size_t>(0));		
+		auto num_ghosted_nodes = std::accumulate(ghosted.cbegin(), ghosted.cend(), static_cast<std::size_t>(0));
+		auto num_owned_nodes = ghosted.size() - num_ghosted_nodes;	
+		assert(ghosted.size() == num_ghosted_nodes + this->_node_attribution[rank].size());	
+
 		std::vector<std::size_t> mapping_next(ghosted.size());
 		std::iota(mapping_next.begin(), mapping_next.end(), 0);
 		for(std::size_t i = 0, j = num_ghosted_nodes; i < mapping.size() - num_ghosted_nodes; ++i) {
+
+			// focus on ghosted node only
 			if(not ghosted[i]) continue;
-			
+
+			// this node will go where it belongs
+			auto dst = mapping[i];
+			if(dst > num_owned_nodes) continue;
+
 			while(ghosted[j]) ++j;
 			using std::swap;
 			// i --> ghosted node; j --> unghosted node
@@ -253,6 +266,17 @@ struct MeshPartitioner<DerivedClass<D>>
 		for(std::size_t inode = 0; inode != nodal_local_to_global.size(); ++inode) {
 			auto index = mapping_next[mapping[inode]];
 			nodal_local_to_global_tmp[index] = nodal_local_to_global[inode];
+			if(index == 34) {
+				printf("#1: %zu, #2: %zu, #3: %zu\n", inode, mapping[inode], nodal_local_to_global[inode]);
+				for(int r = 0; r < _num_parts; ++r) {
+					auto nodelist = _node_attribution[r];
+					std::sort(nodelist.begin(), nodelist.end());
+					auto it = std::find(nodelist.begin(), nodelist.end(), 63951);
+					if(it != nodelist.end()) {
+						printf("63951 @ rank %d\n", r);
+					}
+				}
+			}
 		}
 		nodal_local_to_global = nodal_local_to_global_tmp;
 		//
