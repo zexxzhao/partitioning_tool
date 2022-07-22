@@ -39,7 +39,10 @@ struct MeshPartitioner<DerivedClass<D>>
         }
 		return {};
     }
-
+	
+	auto local_mesh_data(std::size_t rank) const {
+		return _build_local_mesh(rank);
+	}
     void metis(idx_t num_parts = 4) {
 		_num_parts = num_parts;
 		// calculate numbers of nodes and elements
@@ -122,14 +125,155 @@ struct MeshPartitioner<DerivedClass<D>>
 	// renumbering
     private:
 	std::vector<std::size_t> _collect_nodes(std::size_t rank) const {
-		auto local_elements = _element_attribution[rank];
-		auto local_nodes = _node_attribution[rank];
+		auto local_elements = this->_element_attribution[rank];
+		auto local_nodes = this->_node_attribution[rank];
 
 		std::vector<std::size_t> all_local_nodes;
-		for(auto cell : _mesh->elements()) {
-
+		all_local_nodes.reserve(_mesh->elements().first.size() * 4);
+		auto element_local_to_global = this->_element_attribution[rank];
+		auto elements = _mesh->elements(D).first;
+		for(auto ielem : element_local_to_global) {
+			auto element_vertices = elements[ielem];
+			all_local_nodes.insert(
+					all_local_nodes.end(), 
+					element_vertices.begin(), 
+					element_vertices.end());
 		}
+		std::sort(all_local_nodes.begin(), all_local_nodes.end());
+		all_local_nodes.erase(std::unique(all_local_nodes.begin(), all_local_nodes.end()), all_local_nodes.end());
+		return all_local_nodes;
 	}
+
+	typedef short ghosted_type;
+	std::vector<ghosted_type> _find_ghosted_node(size_t rank, const std::vector<std::size_t>& nodes) const {
+
+		auto sorted = std::all_of(nodes.cbegin(), nodes.cend() - 1, 
+				[](const std::size_t& n) {
+					return n < *(&n+1);
+				});
+		assert(sorted);
+
+		std::vector<ghosted_type> ghosted(nodes.size(), 0);
+		auto owned_local_nodes = this->_node_attribution[rank];
+
+		std::sort(owned_local_nodes.begin(), owned_local_nodes.end());
+		
+		for(auto it = nodes.cbegin(), it_owned = owned_local_nodes.cbegin(); it != nodes.cend(); ++it) {
+			it_owned = std::lower_bound(it_owned, owned_local_nodes.cend(), *it);
+			ghosted[std::distance(nodes.cbegin(), it)] = *it_owned != *it;
+		}
+
+		return ghosted;
+	}
+
+	CSRList<std::size_t, std::size_t, std::false_type> _local_vertex_connectivity(const CSRList<std::size_t>& elements) const {
+		// elements should use local node ID
+		auto nnode = *std::max_element(elements.data().cbegin(), elements.data().cend()) + 1;
+		std::size_t expected_bandwidth = 24;
+
+        std::vector<std::vector<std::size_t>> adjacency(nnode);
+		for(auto& cache: adjacency) {
+			cache.reserve(expected_bandwidth);
+		}
+
+        for(auto cell : elements) {
+            const auto& vertex_list = cell.data();
+            std::for_each(
+                vertex_list.cbegin(), 
+                vertex_list.cend(),
+                [&](std::size_t ivtx){
+                    adjacency.at(ivtx).insert(adjacency.at(ivtx).end(), vertex_list.cbegin(), vertex_list.cend());
+                }
+            );
+        }
+		
+		CSRList<std::size_t, std::size_t, std::false_type> local_graph;
+		for(auto& cache: adjacency) {
+			// remove duplicated entries
+			std::sort(cache.begin(), cache.end());
+			cache.erase(std::unique(cache.begin(), cache.end()), cache.end());
+			local_graph.push_back(std::move(cache));
+		}
+		return local_graph;
+	}
+
+	auto _build_local_mesh(std::size_t rank) const {
+		//
+		// global to local mapping
+		//
+		auto nodal_local_to_global = _collect_nodes(rank);
+		std::unordered_map<std::size_t, std::size_t> g2l;
+		g2l.reserve(nodal_local_to_global.size());
+		for(std::size_t inode = 0; inode < nodal_local_to_global.size(); ++inode) {
+			g2l.insert({nodal_local_to_global[inode], inode});
+		}
+
+		//
+		// elements using local nodal ID
+		//
+		CSRList<std::size_t> local_elements;
+		auto element_local_to_global = this->_element_attribution[rank];
+		auto elements = _mesh->elements(D).first;
+		for(auto ielem : element_local_to_global) {
+			auto vertices = elements[ielem];
+			local_elements.push_back(vertices);
+		}
+		//return std::make_tuple(0, 0, 0);
+
+		std::for_each(local_elements.data().begin(), local_elements.data().end(),
+				[&](std::size_t& a){ a = g2l[a]; });
+		//
+		//	vertex connectivity
+		//
+		auto nodal_connectivity = _local_vertex_connectivity(local_elements);
+		auto mapping = reordering::BandwidthReduction(nodal_connectivity)(); 
+
+		// permute to ensure ghosted nodes come last
+		auto ghosted = _find_ghosted_node(rank, nodal_local_to_global);
+		auto num_ghosted_nodes = std::accumulate(ghosted.cbegin(), ghosted.cend(), static_cast<std::size_t>(0));		
+		std::vector<std::size_t> mapping_next(ghosted.size());
+		std::iota(mapping_next.begin(), mapping_next.end(), 0);
+		for(std::size_t i = 0, j = num_ghosted_nodes; i < mapping.size() - num_ghosted_nodes; ++i) {
+			if(not ghosted[i]) continue;
+			
+			while(ghosted[j]) ++j;
+			using std::swap;
+			// i --> ghosted node; j --> unghosted node
+			swap(mapping_next[i], mapping_next[j]);
+			swap(ghosted[i], ghosted[j]);
+		}
+		{
+			auto it = std::upper_bound(ghosted.cbegin(), ghosted.cend(), 0);
+			assert(std::all_of(it, ghosted.cend(), [](const auto & a) { return a; } ));
+		}
+		//
+		// permute vertices
+		//
+		std::vector<std::size_t> nodal_local_to_global_tmp(nodal_local_to_global.size());
+		for(std::size_t inode = 0; inode != nodal_local_to_global.size(); ++inode) {
+			auto index = mapping_next[mapping[inode]];
+			nodal_local_to_global_tmp[index] = nodal_local_to_global[inode];
+		}
+		nodal_local_to_global = nodal_local_to_global_tmp;
+		//
+		// permute elements
+		//
+		std::for_each(local_elements.data().begin(), local_elements.data().end(),
+				[&](std::size_t& a) { a = mapping[a]; a = mapping_next[a]; });
+
+		//
+		// vertex adjacency
+		//
+		
+		CSRList<std::size_t, std::size_t, std::false_type> local_adjacency;
+		auto graph = this->_mesh->adjacent_vertices();
+		for(std::size_t i = 0; i != nodal_local_to_global.size(); ++i) {
+			local_adjacency.push_back(graph[nodal_local_to_global[i]]);
+		}
+		return std::make_tuple(nodal_local_to_global, local_elements, local_adjacency);
+	}
+
+
     const Derived* _mesh;
 	std::size_t _num_parts;
 	CSRList<std::size_t> _element_attribution;

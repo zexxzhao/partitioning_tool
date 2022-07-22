@@ -39,6 +39,7 @@ struct MeshConnectivity<DerivedClass<D>>
 
     private:
     void _collect_mesh_entities(std::size_t dim) {
+		/*
         const auto prime_element_type = ElementSpace<D>().prime_element_types();
         auto num_prime_elements = std::accumulate(prime_element_type.begin(),
             prime_element_type.end(),
@@ -64,6 +65,8 @@ struct MeshConnectivity<DerivedClass<D>>
                     }
                 });
         }
+		*/
+		this->_element_aggregations[dim] = this->_mesh->elements(dim).first;
     }
 
     // {dim0, dim1} already exists, now construct the reverse mappping {dim1, dim0}

@@ -377,6 +377,7 @@ TEST(MeshPartitioner, partitioning) {
 	MeshIO::read(mesh, filename);
 	//MeshPartitioner part(mesh);
 	auto& part = mesh;
+	part.init();
 	auto num_parts = 4;
 	part.metis(num_parts);
 	int ne = 0, nn = 0;
@@ -386,6 +387,25 @@ TEST(MeshPartitioner, partitioning) {
 	}
 	EXPECT_EQ(ne, element_num[4]);
 	EXPECT_EQ(nn, num_entities[0]);
+	{
+		auto [node, element, adjacency] = part.local_mesh_data(0);
+		auto nnode = node.size();
+		auto nowned = part.part(0, "n").size();
+		auto local_nodes = part.part(0, "n");
+		std::sort(local_nodes.begin(), local_nodes.end());
+		for(std::size_t i = 0; i < nnode; ++i) {
+			auto it = std::find(local_nodes.begin(), local_nodes.end(), node[i]);
+			if(i < nowned) {
+				ASSERT_EQ(*it, node[i]) << i << "th node" << std::endl;
+				ASSERT_NE(it, local_nodes.end());
+			}
+			else ASSERT_EQ(it, local_nodes.end());
+		}		
+		EXPECT_EQ(element.size(), part.part(0, "e").size());
+
+		adjacency.size();
+		//auto tmp = part.local_mesh_data(0);
+	}
 }
 
 TEST(H5, IO) {

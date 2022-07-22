@@ -3,7 +3,7 @@ CC=mpicc
 CXX=mpicxx
 
 FLAGS=-std=c++17
-FLAGS+=-O2 -g
+FLAGS+=-O0 -g
 #FLAGS+=-pg 
 #FLAGS+=-fsanitize=address
 
