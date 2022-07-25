@@ -378,7 +378,7 @@ TEST(MeshPartitioner, partitioning) {
 	//MeshPartitioner part(mesh);
 	auto& part = mesh;
 	part.init();
-	auto num_parts = 4;
+	auto num_parts = 8;
 	part.metis(num_parts);
 	int ne = 0, nn = 0;
 	for(int i = 0; i < num_parts; ++i) {
@@ -388,23 +388,25 @@ TEST(MeshPartitioner, partitioning) {
 	EXPECT_EQ(ne, element_num[4]);
 	EXPECT_EQ(nn, num_entities[0]);
 	{
-		auto [node, element, adjacency] = part.local_mesh_data(0);
-		auto nnode = node.size();
-		auto nowned = part.part(0, "n").size();
-		auto local_nodes = part.part(0, "n");
-		std::sort(local_nodes.begin(), local_nodes.end());
-		for(std::size_t i = 0; i < nnode; ++i) {
-			auto it = std::find(local_nodes.begin(), local_nodes.end(), node[i]);
-			if(i < nowned) {
-				ASSERT_EQ(*it, node[i]) << i << "th node" << std::endl;
-				ASSERT_NE(it, local_nodes.end());
-			}
-			else ASSERT_EQ(it, local_nodes.end());
-		}		
-		EXPECT_EQ(element.size(), part.part(0, "e").size());
+		for(int i = 0; i < num_parts; ++i) {
+			auto [node, element, adjacency] = part.local_mesh_data(i);
+			auto nnode = node.size();
+			auto local_nodes = part.part(i, "n");
+			auto nowned = local_nodes.size();
 
-		adjacency.size();
-		//auto tmp = part.local_mesh_data(0);
+			std::sort(local_nodes.begin(), local_nodes.end());
+			for(std::size_t j = 0; j< nnode; ++j) {
+				auto it = std::find(local_nodes.begin(), local_nodes.end(), node[j]);
+				if(j < nowned) {
+					EXPECT_NE(it, local_nodes.end()) << "rank: " << i << ": " << j << "th node" << std::endl;
+					ASSERT_EQ(*it, node[j]);
+				}
+				else {
+					ASSERT_EQ(it, local_nodes.end());
+				}
+			}		
+			EXPECT_EQ(element.size(), part.part(i, "e").size());
+		}
 	}
 }
 

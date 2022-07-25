@@ -1,5 +1,7 @@
 #ifndef __MESH_PARTITIONER_H__
 #define __MESH_PARTITIONER_H__
+
+#include <algorithm>
 #include "CSRList.hpp"
 #include "Reorder.hpp"
 #include "ElementSpace.hpp"
@@ -236,38 +238,56 @@ struct MeshPartitioner<DerivedClass<D>>
 		auto ghosted = _find_ghosted_node(rank, nodal_local_to_global);
 		auto num_ghosted_nodes = std::accumulate(ghosted.cbegin(), ghosted.cend(), static_cast<std::size_t>(0));
 		auto num_owned_nodes = ghosted.size() - num_ghosted_nodes;	
+		assert(num_owned_nodes > 0);
 		assert(ghosted.size() == num_ghosted_nodes + this->_node_attribution[rank].size());	
 
-		std::vector<std::size_t> mapping_next(ghosted.size());
-		std::iota(mapping_next.begin(), mapping_next.end(), 0);
-		for(std::size_t i = 0, j = num_ghosted_nodes; i < mapping.size() - num_ghosted_nodes; ++i) {
-
-			// focus on ghosted node only
-			if(not ghosted[i]) continue;
-
-			// this node will go where it belongs
-			auto dst = mapping[i];
-			if(dst > num_owned_nodes) continue;
-
-			while(ghosted[j]) ++j;
-			using std::swap;
-			// i --> ghosted node; j --> unghosted node
-			swap(mapping_next[i], mapping_next[j]);
-			swap(ghosted[i], ghosted[j]);
+		//std::vector<std::size_t> mapping_next(ghosted.size());
+		//std::iota(mapping_next.begin(), mapping_next.end(), 0);
+		for(std::size_t i = 0; i < ghosted.size(); ++i) {
+			mapping[i] += (ghosted[i] ? ghosted.size() : 0);
+		}
+		{ // squeeze `mapping`
+			auto squeezed_mapping = mapping;
+			std::sort(squeezed_mapping.begin(), squeezed_mapping.end());
+			//auto it = std::find(squeezed_mapping.begin(), squeezed_mapping.end(), 32310);
+			//printf("distance %zu\n", std::distance(squeezed_mapping.begin(), it));
+;			std::unordered_map<std::size_t, std::size_t> old_ID_to_new;
+			old_ID_to_new.reserve(squeezed_mapping.size());
+			for(std::size_t i = 0; i < squeezed_mapping.size(); ++i) {
+				old_ID_to_new.insert({squeezed_mapping[i], i});
+				/*
+				if(squeezed_mapping[i] == 32310){
+					printf("squeezed[%zu] = %zu\n", 32310, old_ID_to_new[32310]);
+				}
+				*/
+			}
+			std::for_each(mapping.begin(), mapping.end(), [&old_ID_to_new](auto& a) { a = old_ID_to_new[a]; });
 		}
 		{
-			auto it = std::upper_bound(ghosted.cbegin(), ghosted.cend(), 0);
-			assert(std::all_of(it, ghosted.cend(), [](const auto & a) { return a; } ));
+			//auto it = std::upper_bound(ghosted.cbegin(), ghosted.cend(), 0);
+			//assert(std::all_of(it, ghosted.cend(), [](const auto & a) { return a; } ));
+			std::vector<std::size_t> ghosted_node;
+			ghosted_node.reserve(num_ghosted_nodes);
+			for(int i = 0; i < ghosted.size(); ++i) {
+				if(ghosted[i]) {
+					ghosted_node.push_back(i);
+					assert(mapping[i] >= num_owned_nodes);
+				}
+			}
+			//assert(std::all_of(ghosted_node.cbegin(), ghosted_node.cend(), 
+			//	[&](const auto a) { return mapping[a] >= num_owned_nodes; } ));
 		}
 		//
 		// permute vertices
 		//
 		std::vector<std::size_t> nodal_local_to_global_tmp(nodal_local_to_global.size());
 		for(std::size_t inode = 0; inode != nodal_local_to_global.size(); ++inode) {
-			auto index = mapping_next[mapping[inode]];
-			nodal_local_to_global_tmp[index] = nodal_local_to_global[inode];
-			if(index == 34) {
-				printf("#1: %zu, #2: %zu, #3: %zu\n", inode, mapping[inode], nodal_local_to_global[inode]);
+			auto index = mapping[inode];
+			nodal_local_to_global_tmp.at(index) = nodal_local_to_global.at(inode);
+			/*
+			if(index ==  32223 and false) {
+				printf("old: %zu, #new: %zu, global: %zu, is ghosted: %d, owned: %zu, ghosted: %zu\n", 
+				inode, mapping[inode], nodal_local_to_global[inode], ghosted[inode], num_owned_nodes, num_ghosted_nodes);
 				for(int r = 0; r < _num_parts; ++r) {
 					auto nodelist = _node_attribution[r];
 					std::sort(nodelist.begin(), nodelist.end());
@@ -277,13 +297,14 @@ struct MeshPartitioner<DerivedClass<D>>
 					}
 				}
 			}
+			*/
 		}
 		nodal_local_to_global = nodal_local_to_global_tmp;
 		//
 		// permute elements
 		//
 		std::for_each(local_elements.data().begin(), local_elements.data().end(),
-				[&](std::size_t& a) { a = mapping[a]; a = mapping_next[a]; });
+				[&](std::size_t& a) { a = mapping[a]; });
 
 		//
 		// vertex adjacency
