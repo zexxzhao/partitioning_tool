@@ -45,6 +45,11 @@ struct MeshPartitioner<DerivedClass<D>>
 	auto local_mesh_data(std::size_t rank) const {
 		return _build_local_mesh(rank);
 	}
+
+	int num_partitions() const {
+		return _num_parts;
+	}
+
     void metis(idx_t num_parts = 4) {
 		_num_parts = num_parts;
 		// calculate numbers of nodes and elements

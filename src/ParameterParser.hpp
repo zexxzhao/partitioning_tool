@@ -13,9 +13,10 @@ class ParameterParser
 	ParameterParser(int argc, const char* const* argv) : _argc(argc), _argv(argv), _description("Allowed options:") {
 		resolve_cmd_line_args();
 	};
-	//auto operator(std::string key) const {
-	//	return _arg_map.at(key);
-	//}
+
+	template <typename T> T eval(std::string key) const {
+		return _arg_map[key].as<T>();
+	}
 
 	private:
 	void resolve_cmd_line_args() {

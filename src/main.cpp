@@ -458,7 +458,10 @@ TEST(ParameterParser, cli) {
 	ParameterParser cli(local_argc, local_argv);
 	// print cli
 	std::cout << cli << std::endl;
+
+	std::cout << cli.eval<int>("num") << std::endl;
 }
+
 TEST(H5, IO) {
 	namespace h5=HighFive;
 	h5::File file("./v.h5", h5::File::ReadWrite | h5::File::Create | h5::File::Truncate );

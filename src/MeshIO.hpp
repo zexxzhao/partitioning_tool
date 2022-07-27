@@ -32,7 +32,7 @@ struct MeshIO
         // get the extension
         auto ext = filename.substr(filename.find_last_of('.') + 1);
 		if(ext == "h5" or ext == ".hdf5") {
-			_write_h5(mesh);
+			_write_h5(mesh, filename);
 		}
 		return -1;
 	}
@@ -221,8 +221,38 @@ struct MeshIO
 		return -2;
 	}
 	template<int D>
-	static int _write_h5(const Mesh<D>& mesh) {
-		return -1;
+	static int _write_h5(const Mesh<D>& mesh, 
+        const std::string& filename, 
+        std::map<std::size_t, std::size_t>& mapping) {
+        namespace h5=HighFive;
+
+        h5::File file(filename, h5::File::ReadWrite | h5::File::Create | h5::File::Truncate );
+        /*
+        std::vector<double> d0(50, 1.2);
+        std::vector<std::size_t> d1(24, 3);
+        auto dataset0 = file.createDataSet<typename decltype(d0)::value_type>("/cpu1/float", h5::DataSpace::From(d0));
+        dataset0.write(d0);
+        auto dataset1 = file.createDataSet<typename decltype(d1)::value_type>("/cpu1/integer", h5::DataSpace::From(d1));
+        dataset1.write(d1);
+        */
+
+        auto num_parts = mesh.num_partitions();
+        for(int rank = 0; rank < num_parts; ++rank) {
+            auto [node, element, adjacency] = mesh.local_mesh_data(rank);
+            // write nodes coordinates
+            std::vector<double> node_coordinates;
+            node_coordinates.reserve(node.size() * D);
+            const auto& mesh_nodes = mesh.nodes();
+            for(std::size_t ivtx = 0; ivtx < node.size(); ++ivtx) {
+                auto nodal_global_id = node[ivtx];
+                node_coordinates.insert(node_coordinates.end(), 
+                    mesh_nodes.begin() + nodal_global_id * D, 
+                    mesh_nodes.begin() + nodal_global_id * D + D);
+            }
+            auto nodes_coordinates_space = file.createDataSet<typename decltype(node_coordinates)::value_type>
+                ("/cpu"+std::to_string(rank) + "/node/x", h5::DataSpace::From(node_coordinates));
+            nodes_coordinates_space.write(node_coordinates);
+        }
 	}
     template <int D>
     static constexpr int _num_vertices(typename ElementSpace<D>::Type element_type) {
