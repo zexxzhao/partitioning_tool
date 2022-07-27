@@ -16,6 +16,7 @@
 #include "ElementSpace.hpp"
 #include "Mesh.hpp"
 #include "MeshIO.hpp"
+#include "ParameterParser.hpp"
 
 
 
@@ -410,6 +411,54 @@ TEST(MeshPartitioner, partitioning) {
 	}
 }
 
+TEST(ParameterParser, cli_help) {
+	std::vector<std::string> param = {"mp", "--help"};
+	int local_argc = param.size();
+	std::vector<const char*> argv_array(local_argc);
+	for(int i = 0; i < argv_array.size(); i++) {
+		argv_array[i] = param[i].c_str();
+	}
+	auto local_argv = argv_array.data();
+	ParameterParser cli(local_argc, local_argv);
+	// print cli
+	std::cout << cli << std::endl;
+}
+TEST(ParameterParser, cli_position) {
+	std::vector<std::string> param = {"mp", "-o", "mesh.h5", "--input_fmt", "msh", "--output_fmt", "h5", "-n", "8", "../box.msh" };
+	int local_argc = param.size();
+	std::vector<const char*> argv_array(local_argc);
+	for(int i = 0; i < argv_array.size(); i++) {
+		argv_array[i] = param[i].c_str();
+	}
+	auto local_argv = argv_array.data();
+	ParameterParser cli(local_argc, local_argv);
+	// print cli
+	std::cout << cli << std::endl;
+}
+TEST(ParameterParser, cli_default_value) {
+	std::vector<std::string> param = {"mp", "../box.msh", "-o", "mesh.h5", "-n", "8"};
+	int local_argc = param.size();
+	std::vector<const char*> argv_array(local_argc);
+	for(int i = 0; i < argv_array.size(); i++) {
+		argv_array[i] = param[i].c_str();
+	}
+	auto local_argv = argv_array.data();
+	ParameterParser cli(local_argc, local_argv);
+	// print cli
+	std::cout << cli << std::endl;
+}
+TEST(ParameterParser, cli) {
+	std::vector<std::string> param = {"mp", "-i", "../box.msh", "-o", "mesh.h5", "--input_fmt", "msh", "--output_fmt", "h5", "-n", "8"};
+	int local_argc = param.size();
+	std::vector<const char*> argv_array(local_argc);
+	for(int i = 0; i < argv_array.size(); i++) {
+		argv_array[i] = param[i].c_str();
+	}
+	auto local_argv = argv_array.data();
+	ParameterParser cli(local_argc, local_argv);
+	// print cli
+	std::cout << cli << std::endl;
+}
 TEST(H5, IO) {
 	namespace h5=HighFive;
 	h5::File file("./v.h5", h5::File::ReadWrite | h5::File::Create | h5::File::Truncate );
