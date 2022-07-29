@@ -6,7 +6,8 @@
 #include <map>
 #include <numeric>
 
-#include <highfive/H5File.hpp>
+//#include <highfive/H5File.hpp>
+#include "HDF5File.hpp"
 #include "Mesh.hpp"
 
 struct MeshIO
@@ -221,24 +222,15 @@ struct MeshIO
 		return -2;
 	}
 	template<int D>
-	static int _write_h5(const Mesh<D>& mesh, 
-        const std::string& filename, 
-        std::map<std::size_t, std::size_t>& mapping) {
+	static int _write_h5(const Mesh<D>& mesh, std::string filename) {
         namespace h5=HighFive;
 
         h5::File file(filename, h5::File::ReadWrite | h5::File::Create | h5::File::Truncate );
-        /*
-        std::vector<double> d0(50, 1.2);
-        std::vector<std::size_t> d1(24, 3);
-        auto dataset0 = file.createDataSet<typename decltype(d0)::value_type>("/cpu1/float", h5::DataSpace::From(d0));
-        dataset0.write(d0);
-        auto dataset1 = file.createDataSet<typename decltype(d1)::value_type>("/cpu1/integer", h5::DataSpace::From(d1));
-        dataset1.write(d1);
-        */
 
         auto num_parts = mesh.num_partitions();
         for(int rank = 0; rank < num_parts; ++rank) {
-            auto [node, element, adjacency] = mesh.local_mesh_data(rank);
+
+            auto [node, ghosted, element, adjacency] = mesh.local_mesh_data(rank);
             // write nodes coordinates
             std::vector<double> node_coordinates;
             node_coordinates.reserve(node.size() * D);
@@ -252,7 +244,12 @@ struct MeshIO
             auto nodes_coordinates_space = file.createDataSet<typename decltype(node_coordinates)::value_type>
                 ("/cpu"+std::to_string(rank) + "/node/x", h5::DataSpace::From(node_coordinates));
             nodes_coordinates_space.write(node_coordinates);
+
+            // write nodal local to global coordinates and ghostness
+            
+            
         }
+        return 1;
 	}
     template <int D>
     static constexpr int _num_vertices(typename ElementSpace<D>::Type element_type) {

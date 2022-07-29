@@ -13,8 +13,15 @@ template<template <int> typename DerivedClass, int D>
 struct MeshPartitioner<DerivedClass<D>>
 {
 	using Derived = DerivedClass<D>;
-    MeshPartitioner(const Derived& mesh): _mesh(&mesh) {}
 
+	/*
+	 *
+	 * @param[in] mesh the mesh to partition
+	 * @param[in] periodic_bc_mapping the nodal mapping for periodic boundary conditions
+	 *  -1 if not applicable
+	 */
+    MeshPartitioner(const Derived& mesh, std::vector<int> periodic_bc_mapping={}): 
+		_mesh(&mesh), _pbc_mapping(std::move(periodic_bc_mapping)) {}
 
 	const CSRList<std::size_t>& part(const std::string& mode = "e") const {
 		if(mode == "e") {
@@ -175,7 +182,8 @@ struct MeshPartitioner<DerivedClass<D>>
 		return ghosted;
 	}
 
-	CSRList<std::size_t, std::size_t, std::false_type> _local_vertex_connectivity(const CSRList<std::size_t>& elements) const {
+	CSRList<std::size_t, std::size_t, std::false_type> 
+	_local_vertex_connectivity(const CSRList<std::size_t>& elements) const {
 		// elements should use local node ID
 		auto nnode = *std::max_element(elements.data().cbegin(), elements.data().cend()) + 1;
 		std::size_t expected_bandwidth = 24;
@@ -241,6 +249,23 @@ struct MeshPartitioner<DerivedClass<D>>
 
 		// permute to ensure ghosted nodes come last
 		auto ghosted = _find_ghosted_node(rank, nodal_local_to_global);
+		// if periodic BC appied
+		if(_pbc_mapping.size()) {
+			// update nodal local to global map
+			std::for_each(nodal_local_to_global.begin(), nodal_local_to_global.end(),
+				[this](auto& gid) {
+					if(this->_pbc_mapping[gid] >= 0) {
+						gid = this->_pbc_mapping[gid];
+					}
+				});
+			
+			// update ghostness
+			for(std::size_t i = 0; i < ghosted.size(); ++i) {
+				if(this->_pbc_mapping[i] >= 0) {
+					ghosted[i] = 1;
+				}
+			}
+		}
 		auto num_ghosted_nodes = std::accumulate(ghosted.cbegin(), ghosted.cend(), static_cast<std::size_t>(0));
 		auto num_owned_nodes = ghosted.size() - num_ghosted_nodes;	
 		assert(num_owned_nodes > 0);
@@ -320,7 +345,10 @@ struct MeshPartitioner<DerivedClass<D>>
 		for(std::size_t i = 0; i != nodal_local_to_global.size(); ++i) {
 			local_adjacency.push_back(graph[nodal_local_to_global[i]]);
 		}
-		return std::make_tuple(nodal_local_to_global, local_elements, local_adjacency);
+
+		std::vector<int> _ghosted(ghosted.size(), 0);
+		std::fill(_ghosted.begin() + num_owned_nodes, _ghosted.end(), 1);
+		return std::make_tuple(nodal_local_to_global, _ghosted, local_elements, local_adjacency);
 	}
 
 
@@ -328,5 +356,7 @@ struct MeshPartitioner<DerivedClass<D>>
 	std::size_t _num_parts;
 	CSRList<std::size_t> _element_attribution;
 	CSRList<std::size_t> _node_attribution;
+
+	std::vector<int> _pbc_mapping;
 };
 #endif // __MESH_PARTITIONER_H__

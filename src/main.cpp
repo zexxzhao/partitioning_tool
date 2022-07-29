@@ -355,7 +355,7 @@ TEST(MeshConnectivity, Mesh) {
 	}
 	if(check_facet_orientation) {
 		//std::srand(std::time(0));
-		std::size_t facet_id = rand() % 100;
+		std::size_t facet_id = arc4random() % 100;
 		auto facet_elements = conn.element_collections(2);
 		if(facet_elements.size() > 0) {
 			auto facet = facet_elements[facet_id];
@@ -390,7 +390,7 @@ TEST(MeshPartitioner, partitioning) {
 	EXPECT_EQ(nn, num_entities[0]);
 	{
 		for(int i = 0; i < num_parts; ++i) {
-			auto [node, element, adjacency] = part.local_mesh_data(i);
+			auto [node, ghosted, element, adjacency] = part.local_mesh_data(i);
 			auto nnode = node.size();
 			auto local_nodes = part.part(i, "n");
 			auto nowned = local_nodes.size();
@@ -409,6 +409,8 @@ TEST(MeshPartitioner, partitioning) {
 			EXPECT_EQ(element.size(), part.part(i, "e").size());
 		}
 	}
+
+	MeshIO::write(mesh, "mesh.h5");
 }
 
 TEST(ParameterParser, cli_help) {
