@@ -435,7 +435,7 @@ TEST(MeshPartitioner, partitioning)
 		}
 	}
 
-	//MeshIO::write(mesh, "mesh.h5");
+	MeshIO::write(mesh, "mesh.h5");
 }
 
 TEST(ParameterParser, cli_help)
@@ -499,7 +499,7 @@ TEST(ParameterParser, cli)
 
 TEST(HDF5File, write)
 {
-	auto f = HDF5File("mesh.h5", "w");
+	auto f = HDF5File("stl.h5", "w");
 	// write vector
 	{
 		std::vector<int> v_int(16);
@@ -509,11 +509,11 @@ TEST(HDF5File, write)
 		std::vector<double> v_double(16);
 		std::iota(v_double.begin(), v_double.end(), 0);
 
-		f.write(v_int, "int");
-		f.write(v_size_t, "size_t");
-		f.write(v_double, "double");
+		f.write(v_int, "Aint");
+		f.write(v_size_t, "Asize_t");
+		f.write(v_double, "Adouble");
 	}
-	
+
 	// write tuple
 	{
 		std::vector<int> a(32);
@@ -522,9 +522,9 @@ TEST(HDF5File, write)
 		int b = 4;
 		std::vector<std::size_t> c(16);
 		std::iota(c.begin(), c.end(), 10);
-
-		auto tuple = std::make_tuple(a, b, c);
-		f.write(tuple, "tuple");
+		auto d = std::make_tuple(1, 3.0, 'c');
+		auto tuple = std::make_tuple(a, b, c, d);
+		f.write(tuple, "Atuple");
 	}
 }
 

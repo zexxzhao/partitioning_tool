@@ -223,6 +223,7 @@ struct MeshIO
 	}
 	template<int D>
 	static int _write_h5(const Mesh<D>& mesh, std::string filename) {
+        /*
         namespace h5=HighFive;
 
         h5::File file(filename, h5::File::ReadWrite | h5::File::Create | h5::File::Truncate );
@@ -249,6 +250,10 @@ struct MeshIO
             
             
         }
+        */
+        HDF5File file(filename, "w");
+    
+        file.write(mesh, "mesh");
         return 1;
 	}
     template <int D>
