@@ -1,162 +1,187 @@
 #ifndef __HDF5FILE_H__
 #define __HDF5FILE_H__
 
-#include <memory>
 #include <highfive/H5File.hpp>
+#include <memory>
 
 #include "Mesh.hpp"
 
 namespace h5 = HighFive;
-class HDF5File
-{
+class HDF5File {
 public:
     /**
      * @brief Construct a new HDF5File object
-     *  The HDF5File is based HighFive and HDF5. It provides read/write access to common stl templates.
-     *  It also has interface to Mesh<int>
+     *  The HDF5File is based HighFive and HDF5. It provides read/write access
+     * to common stl templates. It also has interface to Mesh<int>
      * @param filename
      * @param open_flag: "r" (Read) or "w" (Write)
      */
-    HDF5File(std::string filename, std::string open_flag) : _file(nullptr)
-    {
-        if (open_flag == "w")
-        {
-            _file = std::make_unique<h5::File>(filename, h5::File::ReadWrite | h5::File::Create | h5::File::Truncate);
-        }
-        else if (open_flag == "r")
-        {
-            _file = std::make_unique<h5::File>(filename, h5::File::ReadOnly | h5::File::Create);
-        }
-        else
-        {
+    HDF5File(std::string filename, std::string open_flag) : _file(nullptr) {
+        if (open_flag == "w") {
+            _file = std::make_unique<h5::File>(
+                filename,
+                h5::File::ReadWrite | h5::File::Create | h5::File::Truncate);
+        } else if (open_flag == "r") {
+            _file = std::make_unique<h5::File>(filename, h5::File::ReadOnly |
+                                                             h5::File::Create);
+        } else {
             assert(false and "Invalid open flag");
         }
     }
 
     /**
-     * @brief write std::vector 
+     * @brief write std::vector
      * The vector is stored at "datapath/vector/0"
      * @tparam T typename in std::vector
      * @param vec: std::vector to write
-     * @param datapath: path to data 
+     * @param datapath: path to data
      */
     template <typename T>
-    void write(const std::vector<T> &vec, std::string datapath)
-    {
-        // auto dataset = _file->createDataSet<T>(datapath, h5::DataSpace::From(vec));
-        // dataset.write(vec);
+    void write(const std::vector<T> &vec, std::string datapath) {
+        // auto dataset = _file->createDataSet<T>(datapath,
+        // h5::DataSpace::From(vec)); dataset.write(vec);
         _write_vector(vec, datapath);
     }
 
     /**
      * @brief write a scalar (including integer or floating point)
-     * 
+     *
      * @tparam T scalar type
-     * @tparam  Anonymous typename 
+     * @tparam  Anonymous typename
      * @param data: data to write
      * @param datapath: path to data
      */
     template <typename T, typename = std::enable_if_t<std::is_scalar_v<T>>>
-    void write(const T &data, std::string datapath)
-    {
-        //std::vector<T> vec({data});
-        //write(vec, datapath);
+    void write(const T &data, std::string datapath) {
+        // std::vector<T> vec({data});
+        // write(vec, datapath);
         _write_scalar(data, datapath);
     }
 
     /**
      * @brief write a tuple
-     * 
-     * @tparam Ts 
+     *
+     * @tparam Ts
      * @param pack: data to write
      * @param datapath: path to data
      */
     template <typename... Ts>
-    void write(const std::tuple<Ts...> &pack, std::string datapath)
-    {
+    void write(const std::tuple<Ts...> &pack, std::string datapath) {
         _write_tuple<0, Ts...>(pack, datapath);
     }
 
     /**
      * @brief write a CSRList
-     * 
-     * @tparam T 
-     * @tparam U 
-     * @tparam is_directed 
-     * @param csrlist 
-     * @param datapath 
+     *
+     * @tparam T
+     * @tparam U
+     * @tparam is_directed
+     * @param csrlist
+     * @param datapath
      */
     template <typename T, typename U, bool is_directed>
-    void write(const CSRList<T, U, std::bool_constant<is_directed>>& csrlist, std::string datapath) {
+    void write(const CSRList<T, U, std::bool_constant<is_directed>> &csrlist,
+               std::string datapath) {
         _write_csrlist(csrlist, datapath);
     }
     /**
      * @brief write a mesh
-     * 
+     *
      * @tparam D: integer, dimension
-     * @param mesh: mesh to write 
+     * @param mesh: mesh to write
      * @param datapath: path to data
      */
-    template <int D>
-    void write(const Mesh<D> &mesh, std::string datapath)
-    {
+    template <int D> void write(const Mesh<D> &mesh, std::string datapath) {
         static_assert(0 <= D and D <= 3, "D must be between 0 and 3");
-        // write global data, including nodal coordinates, element, and element ID
-        write(mesh.nodes(), "node");
-        if constexpr(D == 3) {
+        // write global data, including nodal coordinates, element, and element
+        // ID
+        auto localpath = datapath;
+        regulerize_path(localpath);
+        write(mesh.nodes(), localpath + "node");
+        if constexpr (D == 3) {
             // D == 2
             {
                 auto info = mesh.elements(2);
-                write(info.first, "secondary/element");
-                write(info.second, "secondary/ID");
+                write(info.first, localpath + "secondary/element");
+                write(info.second, localpath + "secondary/ID");
             }
             // D == 3
             {
                 auto info = mesh.elements(3);
-                write(info.first, "prime/element");
-                write(info.second, "prime/ID");
+                write(info.first, localpath + "prime/element");
+                write(info.second, localpath + "prime/ID");
             }
+        } else if constexpr (D == 2) {
+        } else if constexpr (D == 1) {
+        } else if constexpr (D == 0) {
+        } else {
         }
-        else if constexpr (D == 2) {}
-        else if constexpr (D == 1) {}
-        else if constexpr (D == 0) {}
-        else {}
+        write(mesh.adjacent_vertices(), localpath + "adjacency");
 
         // write local data
         auto num_parts = mesh.num_partitions();
-        for (std::size_t i = 0; i < num_parts; ++i)
-        {
-            auto part = mesh.local_mesh_data(i);
-            //write(part, datapath);
+        auto conn = mesh.connectivity(D - 1, D);
+        auto orientation = mesh.orientation();
+        assert(conn.size() == orientation.size());
+        for (std::size_t i = 0; i < num_parts; ++i) {
+            auto [node, is_ghosted, element] = mesh.local_mesh_data(i);
+            write(node, localpath + "partition/" + std::to_string(i) + "/nl2g");
+            write(is_ghosted,
+                  localpath + "partition/" + std::to_string(i) + "/ghost");
+            write(element,
+                  localpath + "partition/" + std::to_string(i) + "/el2g");
+            // generate array for secondary elements
+            std::vector<std::size_t> attach;
+            std::vector<std::size_t> orient;
+
+            for (std::size_t ifacet = 0; ifacet < conn.size(); ++ifacet) {
+                auto f2e = conn[ifacet];
+                auto forient = orientation[ifacet];
+                assert(f2e.size() == forient.size());
+                for (std::size_t ielem = 0; ielem < f2e.size(); ++ielem) {
+                    auto it =
+                        std::find(element.begin(), element.end(), f2e[ielem]);
+                    if (it == element.end()) {
+                        auto local_element_idx =
+                            std::distance(element.begin(), it);
+                        attach.push_back(local_element_idx);
+                        orient.push_back(forient[ielem]);
+                    }
+                }
+            }
+
+            write(attach,
+                  localpath + "partition/" + std::to_string(i) + "/facet/e");
+            write(orient,
+                  localpath + "partition/" + std::to_string(i) + "/facet/o");
         }
     }
 
 private:
     /**
      * @brief add "/" in the path if it does not exist
-     * 
-     * @param path 
+     *
+     * @param path
      */
-    static void regulerize_path(std::string &path)
-    {
-        if (path.back() != '/')
-        {
+    static void regulerize_path(std::string &path) {
+        if (path.back() != '/') {
             path += '/';
         }
     }
 
     /**
-     * @brief 
-     * 
-     * @tparam Iterator 
-     * @tparam std::iterator_traits<Iterator>::value_type 
-     * @param begin 
-     * @param end 
-     * @param datapath 
+     * @brief
+     *
+     * @tparam Iterator
+     * @tparam std::iterator_traits<Iterator>::value_type
+     * @param begin
+     * @param end
+     * @param datapath
      */
-    template <typename Iterator, typename ValueType = typename std::iterator_traits<Iterator>::value_type>
-    void _write_1D_array(Iterator begin, Iterator end, std::string datapath)
-    {
+    template <typename Iterator,
+              typename ValueType =
+                  typename std::iterator_traits<Iterator>::value_type>
+    void _write_1D_array(Iterator begin, Iterator end, std::string datapath) {
         auto dim = std::distance(begin, end);
         auto dataspace = h5::DataSpace(dim);
         auto dataset = _file->createDataSet<ValueType>(datapath, dataspace);
@@ -164,16 +189,15 @@ private:
     }
 
     /**
-     * @brief 
-     * 
-     * @tparam T 
-     * @tparam typename 
-     * @param value 
-     * @param datapath 
+     * @brief
+     *
+     * @tparam T
+     * @tparam typename
+     * @param value
+     * @param datapath
      */
     template <typename T, typename = std::enable_if_t<std::is_scalar_v<T>>>
-    void _write_scalar(T value, std::string datapath)
-    {
+    void _write_scalar(T value, std::string datapath) {
         auto localpath = datapath;
         regulerize_path(localpath);
         localpath += "scalar/0";
@@ -181,34 +205,32 @@ private:
     }
 
     /**
-     * @brief 
-     * 
-     * @tparam T 
-     * @param vec 
-     * @param datapath 
+     * @brief
+     *
+     * @tparam T
+     * @param vec
+     * @param datapath
      */
     template <typename T>
-    void _write_vector(const std::vector<T> &vec, std::string datapath)
-    {
+    void _write_vector(const std::vector<T> &vec, std::string datapath) {
         auto localpath = datapath;
         regulerize_path(localpath);
         localpath += "vector/0";
-        // h5::DataSet dataset = _file->createDataSet<T>(localpath, h5::DataSpace::From(vec));
-        // dataset.write(vec);
+        // h5::DataSet dataset = _file->createDataSet<T>(localpath,
+        // h5::DataSpace::From(vec)); dataset.write(vec);
         _write_1D_array(vec.cbegin(), vec.cend(), localpath);
     }
 
     /**
      * @brief (not tested)
-     * 
-     * @tparam T 
-     * @tparam N 
-     * @param arr 
-     * @param datapath 
+     *
+     * @tparam T
+     * @tparam N
+     * @param arr
+     * @param datapath
      */
     template <typename T, int N>
-    void _write_array(const std::array<T, N> &arr, std::string datapath)
-    {
+    void _write_array(const std::array<T, N> &arr, std::string datapath) {
         auto localpath = datapath;
         regulerize_path(localpath);
         localpath += "array/0";
@@ -218,17 +240,21 @@ private:
 
     /**
      * @brief (not tested)
-     * 
-     * @tparam MapType 
-     * @tparam KeyType 
-     * @tparam ValueType 
-     * @tparam std::enable_if_t<true or std::declval<MapType<KeyType, ValueType> >().size()> 
-     * @param map 
-     * @param datapath 
+     *
+     * @tparam MapType
+     * @tparam KeyType
+     * @tparam ValueType
+     * @tparam std::enable_if_t<true or std::declval<MapType<KeyType, ValueType>
+     * >().size()>
+     * @param map
+     * @param datapath
      */
-    template <template <typename, typename> typename MapType, typename KeyType, typename ValueType, typename = std::enable_if_t<true or std::declval<MapType<KeyType, ValueType> >().size()> >
-    void _write_map(const MapType<KeyType, ValueType> &map, std::string datapath)
-    {
+    template <template <typename, typename> typename MapType, typename KeyType,
+              typename ValueType,
+              typename = std::enable_if_t<
+                  true or std::declval<MapType<KeyType, ValueType>>().size()>>
+    void _write_map(const MapType<KeyType, ValueType> &map,
+                    std::string datapath) {
 
         std::vector<KeyType> keys;
         std::vector<ValueType> values;
@@ -242,22 +268,28 @@ private:
         _write_vector(keys, localpath + "map/0");
         _write_vector(values, localpath + "map/1");
         //_write_1D_array(keys.begin(), keys.end(), localpath + "map/key");
-        //_write_1D_array(values.begin(), values.end(), localpath + "map/value");
+        //_write_1D_array(values.begin(), values.end(), localpath +
+        //"map/value");
     }
 
     /**
      * @brief (not tested)
-     * 
-     * @tparam PairType 
-     * @tparam KeyType 
-     * @tparam ValueType 
-     * @tparam std::enable_if_t<true or std::declval<PairType<KeyType, ValueType> >().first> 
-     * @param pair 
-     * @param datapath 
+     *
+     * @tparam PairType
+     * @tparam KeyType
+     * @tparam ValueType
+     * @tparam std::enable_if_t<true or std::declval<PairType<KeyType,
+     * ValueType>
+     * >().first>
+     * @param pair
+     * @param datapath
      */
-    template <template <typename, typename> typename PairType, typename KeyType, typename ValueType, typename = std::enable_if_t<true or std::declval<PairType<KeyType, ValueType> >().first> >
-    void _write_pair(const PairType<KeyType, ValueType> &pair, std::string datapath)
-    {
+    template <template <typename, typename> typename PairType, typename KeyType,
+              typename ValueType,
+              typename = std::enable_if_t<
+                  true or std::declval<PairType<KeyType, ValueType>>().first>>
+    void _write_pair(const PairType<KeyType, ValueType> &pair,
+                     std::string datapath) {
         auto first = pair.first;
         auto second = pair.second;
         auto localpath = datapath;
@@ -267,53 +299,52 @@ private:
     }
 
     /**
-     * @brief 
-     * 
-     * @tparam N 
-     * @tparam Ts 
-     * @param pack 
-     * @param datapath 
+     * @brief
+     *
+     * @tparam N
+     * @tparam Ts
+     * @param pack
+     * @param datapath
      */
     template <int N, typename... Ts>
-    void _write_tuple(const std::tuple<Ts...> &pack, std::string datapath)
-    {
+    void _write_tuple(const std::tuple<Ts...> &pack, std::string datapath) {
         static_assert(N < sizeof...(Ts), "Out of bounds");
         auto data = std::get<N>(pack);
 
         auto localpath = datapath;
-        if (localpath.back() != '/')
-        {
+        if (localpath.back() != '/') {
             localpath += '/';
         }
         localpath += "tuple/" + std::to_string(N);
 
         write(data, localpath);
-        if constexpr (N < sizeof...(Ts) - 1)
-        {
+        if constexpr (N < sizeof...(Ts) - 1) {
             _write_tuple<N + 1, Ts...>(pack, datapath);
         }
     }
 
     /**
-     * @brief 
-     * 
-     * @tparam T 
-     * @tparam U 
-     * @tparam is_directed 
-     * @param list 
-     * @param datapath 
+     * @brief
+     *
+     * @tparam T
+     * @tparam U
+     * @tparam is_directed
+     * @param list
+     * @param datapath
      */
     template <typename T, typename U, bool is_directed>
-    void _write_csrlist(const CSRList<T, U, std::bool_constant<is_directed>>& list, std::string datapath) {
+    void
+    _write_csrlist(const CSRList<T, U, std::bool_constant<is_directed>> &list,
+                   std::string datapath) {
         auto localpath = datapath;
-        if (localpath.back() != '/')
-        {
+        if (localpath.back() != '/') {
             localpath += '/';
         }
         localpath += "csrlist/";
         write(list.data(), localpath + "data");
         write(list.offset(), localpath + "offset");
     }
+
 private:
     std::unique_ptr<h5::File> _file;
 };
